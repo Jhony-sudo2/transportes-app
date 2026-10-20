@@ -101,3 +101,41 @@ session.json
 /.next-customer-check/
 /.next-refunds-check/
 /.next-users-check/
+
+# >>> TRANSPORTES: reglas locales >>>
+# Builds, caches, pruebas temporales y credenciales privadas.
+/target/
+/build/
+/dist/
+/output/
+/logs/
+/node_modules/
+/.next/
+/.turbo/
+/coverage/
+/playwright-report/
+/test-results/
+/__pycache__/
+/Microsoft/Windows/PowerShell/ModuleAnalysisCache/
+*.py[cod]
+.DS_Store
+*.log
+*.log.*
+/log.txt
+hs_err_pid*
+replay_pid*
+*.hprof
+*.jar
+!/.mvn/wrapper/maven-wrapper.jar
+/.env
+/.env.*
+!/.env.example
+!/.env.sample
+!/.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+# <<< TRANSPORTES: fin reglas locales <<<
