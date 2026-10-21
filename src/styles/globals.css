@@ -1,0 +1,697 @@
+@import "tailwindcss";
+
+/* Tailwind v4: dark variant responds to .dark class on <html> (used by next-themes) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ── Brand colors ── */
+  --color-primary: #0b57d0;
+  --color-primary-hover: #1b66d0;
+  --color-primary-active: #0a45a6;
+  --color-primary-disabled-bg: #e5edff;
+  --color-primary-disabled-text: #a8c7fa;
+  --color-link: #1a0dab;
+  --color-warning: #fbbc04;
+  --color-warning-bg: #fef7e0;
+  --color-warning-text: #8b6914;
+  --color-success: #1e7e34;
+  --color-success-text: #166534;
+  --color-hover-blue: #a3c9ff;
+  --color-focus-ring: #a8c7fa;
+  --color-pale-blue: #e5edff;
+  --color-soft-blue: #d3e3fd;
+
+  /* ── Insect theme accent colors ── */
+  --color-accent-amber: #f59e0b;
+  --color-accent-amber-bg: #fef3c7;
+  --color-accent-amber-text: #92400e;
+  --color-accent-green: #059669;
+  --color-accent-green-bg: #d1fae5;
+  --color-accent-green-text: #065f46;
+  --color-accent-violet: #7c3aed;
+  --color-accent-violet-bg: #ede9fe;
+  --color-accent-violet-text: #4c1d95;
+
+  /* ── Neutral scale ── */
+  --color-text-primary-black: #1f1f1f;
+  --color-text-primary: #3c4043;
+  --color-text-secondary: #70757a;
+  --color-text-tertiary: #636363;
+  --color-text-light: #474747;
+  --color-white: #ffffff;
+  --color-surface: #f8f9fa;
+  --color-border: #d2d2d2;
+  --color-border-hover: #b9bdbe;
+  --color-error: #d33b27;
+  --color-surface-hover: #f1f3f4;
+  --color-surface-active: #e8eaed;
+
+  /* ── Typography ── */
+  --font-sans: var(--font-google-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-secondary: var(--font-roboto), system-ui, sans-serif;
+  --font-mono: ui-monospace, "Courier New", monospace;
+
+  /* ── Spacing (8 px base) ── */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-7: 28px;
+  --spacing-8: 32px;
+  --spacing-14: 56px;
+  --spacing-15: 60px;
+  --spacing-18: 72px;
+  --spacing-50: 200px;
+  --spacing-100: 400px;
+
+  /* ── Border radius ── */
+  --radius-none: 0;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  --radius-circle: 50%;
+
+  /* ── Elevation / Shadows ── */
+  --shadow-raised: 0 1px 2px rgba(31, 31, 31, 0.08);
+  --shadow-elevated: 0 2px 4px rgba(31, 31, 31, 0.1);
+  --shadow-high: 0 4px 8px rgba(31, 31, 31, 0.12);
+  --shadow-top: 0 8px 16px rgba(31, 31, 31, 0.15);
+
+  /* ── Layout ── */
+  --container-max: 1440px;
+
+  /* ── Named animations ── */
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-fade-in-up: fade-in-up 0.4s ease-out both;
+  --animate-fade-in-down: fade-in-down 0.4s ease-out both;
+  --animate-slide-in-left: slide-in-left 0.3s ease-out both;
+  --animate-scale-in: scale-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.8s ease-in-out infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-bounce-gentle: bounce-gentle 2s ease-in-out infinite;
+  --animate-spin-slow: spin 3s linear infinite;
+}
+
+/* ── Keyframe definitions ── */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes bounce-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ── Stagger delay helpers ── */
+.delay-75 {
+  animation-delay: 75ms;
+}
+.delay-150 {
+  animation-delay: 150ms;
+}
+.delay-225 {
+  animation-delay: 225ms;
+}
+.delay-300 {
+  animation-delay: 300ms;
+}
+.delay-450 {
+  animation-delay: 450ms;
+}
+
+/* ── Skeleton shimmer utility ── */
+@layer utilities {
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface) 0%,
+      var(--color-border) 50%,
+      var(--color-surface) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-text-primary-black);
+    background-color: var(--color-white);
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  a {
+    color: var(--color-link);
+    font-family: var(--font-secondary);
+  }
+}
+
+/*
+ * ── Tailwind v4 @theme inline bridge ──────────────────────────────────────
+ * Maps shadcn/ui CSS variables (defined in :root / .dark below) to Tailwind
+ * color utilities (bg-popover, text-muted-foreground, etc.).
+ * Only variables NOT already defined in the @theme block above are listed here
+ * to avoid circular references (e.g. --color-primary is already in @theme).
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* ── shadcn/ui CSS variable bridge (light) ── */
+:root {
+  /*
+   * --color-primary-text = primary color used AS TEXT on a surface.
+   * Light mode: same dark blue works on white/gray surfaces.
+   * Dark mode (overridden below): lighter blue for legibility on dark surfaces.
+   */
+  --color-primary-text: #0b57d0;
+
+  --background: var(--color-white);
+  --foreground: var(--color-text-primary-black);
+  --card: var(--color-white);
+  --card-foreground: var(--color-text-primary-black);
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-text-primary-black);
+  --primary: var(--color-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-surface);
+  --secondary-foreground: var(--color-text-primary-black);
+  --muted: var(--color-surface);
+  --muted-foreground: var(--color-text-secondary);
+  --accent: var(--color-soft-blue);
+  --accent-foreground: var(--color-primary);
+  --destructive: var(--color-error);
+  --destructive-foreground: #ffffff;
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-focus-ring);
+  --radius: var(--radius-md);
+}
+
+/* ── shadcn/ui CSS variable bridge (dark) ── */
+.dark {
+  /*
+   * Primary stays dark blue (#1a73e8) so that text-primary-foreground (#ffffff)
+   * always has at least 4.5:1 contrast — avoids white-on-light-blue unreadability.
+   * Links and focus rings use the lighter Google-dark blue (#8ab4f8) for legibility
+   * against the dark surfaces.
+   */
+  --color-white: #202124;
+  --color-surface: #28292d;
+  --color-text-primary-black: #e8eaed;
+  --color-text-primary: #c8cacc;
+  --color-text-secondary: #9aa0a6;
+  --color-text-tertiary: #8c8c8c;
+  --color-text-light: #a8a8a8;
+  --color-border: #3c4043;
+  --color-border-hover: #5f6368;
+  --color-primary: #1a73e8;
+  --color-primary-hover: #1b6fd4;
+  --color-primary-active: #1560c0;
+  --color-link: #8ab4f8;
+  --color-primary-text: #8ab4f8;
+  --color-pale-blue: #1a2d4a;
+  --color-soft-blue: #1a2840;
+  --color-surface-hover: #35363b;
+  --color-surface-active: #3f4043;
+  --color-error: #f28b82;
+  --color-focus-ring: #8ab4f8;
+  --color-warning: #fdd663;
+  --color-warning-bg: #2a1f00;
+  --color-warning-text: #fdd663;
+  --color-success: #22c55e;
+  --color-success-text: #4ade80;
+  --color-accent-amber: #fcd34d;
+  --color-accent-amber-bg: #292000;
+  --color-accent-amber-text: #fcd34d;
+  --color-accent-green: #34d399;
+  --color-accent-green-bg: #002918;
+  --color-accent-green-text: #34d399;
+  --color-accent-violet: #a78bfa;
+  --color-accent-violet-bg: #1e1040;
+  --color-accent-violet-text: #a78bfa;
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-high: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --shadow-top: 0 8px 16px rgba(0, 0, 0, 0.6);
+
+  /* shadcn bridge */
+  --background: #202124;
+  --foreground: #e8eaed;
+  --card: #28292d;
+  --card-foreground: #e8eaed;
+  --popover: #2d2e33;
+  --popover-foreground: #e8eaed;
+  --primary: #1a73e8;
+  --primary-foreground: #ffffff;
+  --secondary: #35363b;
+  --secondary-foreground: #e8eaed;
+  --muted: #35363b;
+  --muted-foreground: #9aa0a6;
+  --accent: #1a2d4a;
+  --accent-foreground: #8ab4f8;
+  --destructive: #f28b82;
+  --destructive-foreground: #ffffff;
+  --border: #3c4043;
+  --input: #3c4043;
+  --ring: #8ab4f8;
+}
+
+/* Identidad Transportes Guatemala: superficies cálidas, tinta azul y verde. */
+.transport-app {
+  --tg-ink: #142f35;
+  --tg-green: #176a52;
+  --tg-muted: #62746e;
+  --tg-paper: #fffefb;
+  --tg-line: #d9e2da;
+  --color-primary: #176a52;
+  --color-primary-text: #176a52;
+  --color-pale-blue: #e8f3eb;
+  --color-surface: #f0f4ed;
+  --color-white: #fffefb;
+  --color-text-primary: #142f35;
+  --color-text-primary-black: #142f35;
+  --color-text-secondary: #62746e;
+  --color-border: #d9e2da;
+  --primary: #176a52;
+  --primary-foreground: #fff;
+  --background: #fffefb;
+  --foreground: #142f35;
+  --input: #cbd7ce;
+  --border: #d9e2da;
+  --ring: #80ad94;
+  min-height: 100vh;
+  background: #f3f5ee;
+  color: var(--tg-ink);
+  font-family: var(--font-google-sans), Arial, sans-serif;
+}
+.tg-nav {
+  background: var(--tg-paper);
+  border-bottom: 1px solid var(--tg-line);
+}
+.tg-nav-inner {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.tg-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-decoration: none;
+}
+.tg-brand small {
+  display: block;
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}
+.tg-brand-mark {
+  width: 43px;
+  height: 43px;
+  background: var(--tg-green);
+  color: white;
+  border-radius: 12px 12px 12px 3px;
+  display: grid;
+  place-items: center;
+}
+.tg-nav nav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  font-size: 13px;
+}
+.tg-nav-register {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  border: 1px solid var(--tg-line);
+  border-radius: 8px;
+}
+.tg-auth {
+  max-width: 1120px;
+  padding: 48px 32px 24px;
+  margin: auto;
+}
+.tg-intro {
+  margin-bottom: 30px;
+}
+.tg-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: var(--tg-green);
+  margin-bottom: 14px;
+}
+.tg-eyebrow span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tg-green);
+}
+.tg-intro h1 {
+  font-size: clamp(28px, 4vw, 45px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+.tg-intro > p:last-child {
+  margin-top: 12px;
+  color: var(--tg-muted);
+  font-size: 14px;
+}
+.tg-auth-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.tg-form-card {
+  background: var(--tg-paper);
+  border: 1px solid var(--tg-line);
+  border-radius: 20px;
+  padding: 38px;
+  box-shadow: 0 10px 40px #1b403309;
+}
+.tg-card-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin-bottom: 8px;
+}
+.tg-card-description {
+  font-size: 13px;
+  color: var(--tg-muted);
+  line-height: 1.7;
+  margin-bottom: 26px;
+}
+.transport-app input {
+  border-radius: 9px;
+  background: var(--tg-paper);
+  border-color: var(--tg-line);
+  min-height: 45px;
+  box-shadow: none;
+}
+.transport-app label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.transport-app button[type="submit"] {
+  min-height: 46px;
+  border-radius: 9px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.tg-form-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  font-size: 12px;
+  color: var(--tg-green);
+}
+.tg-back-link {
+  display: block;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--tg-green);
+}
+.tg-form-links a:hover,
+.tg-back-link a:hover,
+a.tg-back-link:hover {
+  text-decoration: underline;
+}
+.tg-journey {
+  background: #16383e;
+  color: #eff6ed;
+  border-radius: 20px;
+  padding: 30px;
+  overflow: hidden;
+}
+.tg-journey-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #b9d2bc;
+  margin-bottom: 35px;
+}
+.tg-journey-top span {
+  flex: 1;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+}
+.tg-journey h2 {
+  font-size: 32px;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  font-weight: 500;
+}
+.tg-journey > p {
+  max-width: 240px;
+  margin-top: 15px;
+  color: #b3c9c2;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.tg-route-art {
+  color: #a8c89b;
+  margin: 15px -8px 8px;
+}
+.tg-route-art svg {
+  width: 100%;
+  max-height: 140px;
+}
+.tg-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #b9d2bc;
+}
+.tg-security {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid #ffffff20;
+  padding-top: 22px;
+  margin-top: 28px;
+  font-size: 12px;
+}
+.tg-security small {
+  display: block;
+  margin-top: 4px;
+  color: #b3c9c2;
+  font-size: 11px;
+}
+.tg-footer {
+  text-align: center;
+  color: var(--tg-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin: 28px 0 10px;
+}
+.tg-footer span {
+  margin: 0 10px;
+}
+.tg-notice {
+  background: var(--color-surface);
+  border: 1px solid var(--tg-line);
+  padding: 13px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dark .transport-app {
+  --tg-ink: #e6eee6;
+  --tg-muted: #a4b7ad;
+  --tg-paper: #172d30;
+  --tg-line: #345052;
+  --tg-green: #8bceac;
+  --color-primary: #347d62;
+  --color-primary-text: #8bceac;
+  --color-white: #172d30;
+  --color-surface: #223d3b;
+  --color-text-primary: #e6eee6;
+  --color-text-primary-black: #e6eee6;
+  --color-text-secondary: #a4b7ad;
+  --color-border: #345052;
+  --primary: #347d62;
+  --input: #345052;
+  --ring: #8bceac;
+  background: #102326;
+}
+.dark .tg-brand-mark {
+  background: #347d62;
+}
+@media (max-width: 760px) {
+  .tg-auth {
+    padding: 30px 20px 20px;
+  }
+  .tg-auth-grid {
+    grid-template-columns: 1fr;
+  }
+  .tg-form-card {
+    padding: 26px;
+    border-radius: 16px;
+  }
+  .tg-journey {
+    display: none;
+  }
+  .tg-nav-inner {
+    padding: 16px 20px;
+  }
+  .tg-nav nav {
+    gap: 14px;
+  }
+  .tg-brand {
+    font-size: 8px;
+    gap: 8px;
+  }
+  .tg-brand small {
+    font-size: 12px;
+  }
+  .tg-nav-register {
+    padding: 8px;
+  }
+  .tg-nav nav > a:first-child {
+    display: none;
+  }
+  .tg-footer {
+    line-height: 2;
+  }
+}

@@ -1,0 +1,36 @@
+import "server-only";
+
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { getSession } from "@/lib/auth/session";
+import { activeIam } from "@/lib/api/active-iam";
+import {
+  unauthorizedResponse,
+  forbiddenResponse,
+  internalErrorResponse,
+  applicationErrorResponse,
+} from "@/lib/api/responses";
+import { ApplicationError } from "@/types/error";
+
+async function getToken(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get("access_token")?.value ?? null;
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const session = await getSession();
+  if (session === null) return unauthorizedResponse();
+  if (!session.roles.includes("SYSTEM_ADMIN")) return forbiddenResponse();
+  const token = await getToken();
+  if (token === null) return unauthorizedResponse();
+  try {
+    const raw = await request.json() as Record<string, unknown>;
+    // The frontend form uses `linkedInstitutions`; the IAM service expects `institutionIds`.
+    const { linkedInstitutions, ...rest } = raw;
+    const iamBody = { ...rest, institutionIds: linkedInstitutions };
+    return NextResponse.json(await activeIam.createCongressAdmin(iamBody, token), { status: 201 });
+  } catch (error) {
+    if (error instanceof ApplicationError) return applicationErrorResponse(error);
+    return internalErrorResponse();
+  }
+}
