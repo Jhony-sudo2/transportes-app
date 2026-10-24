@@ -1,4 +1,5 @@
 import { NavBar } from "@/components/layout/NavBar";
+import { BranchWorkspaceProvider } from "@/components/layout/BranchWorkspaceProvider";
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -7,8 +8,10 @@ interface PublicLayoutProps {
 export default function PublicLayout({ children }: PublicLayoutProps): React.ReactElement {
   return (
     <div className="transport-app">
-      <NavBar />
-      <main className="">{children}</main>
+      <BranchWorkspaceProvider>
+        <NavBar />
+        <main className="">{children}</main>
+      </BranchWorkspaceProvider>
     </div>
   );
 }

@@ -1,7 +1,20 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { BusFront, ArrowUpRight } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
-export function NavBar(): React.ReactElement {
+import { getTransportSession } from "@/lib/auth/session";
+import { AdminNavigation } from "./AdminNavigation";
+import { BranchAdminNavigation } from "./BranchAdminNavigation";
+export async function NavBar(): Promise<React.ReactElement> {
+  let user = null;
+  try {
+    user = await getTransportSession();
+  } catch {
+    /* Las vistas publicas siguen disponibles. */
+  }
+  if (user?.role.name === "ADMIN")
+    return <AdminNavigation name={user.name + " " + user.lastName} />;
+  if (user?.role.name === "SUCURSAL_ADMIN" && !user.resetPassword)
+    return <BranchAdminNavigation name={user.name + " " + user.lastName} />;
   return (
     <header className="tg-nav">
       <div className="tg-nav-inner">

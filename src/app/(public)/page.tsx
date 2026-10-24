@@ -29,6 +29,7 @@ export default async function Home(): Promise<React.ReactElement> {
     SUCURSAL_ADMIN: "Administrador de sucursal",
     CUSTOMER: "Cliente",
     DRIVER: "Chofer",
+    CAJERO: "Cajero",
   };
   return (
     <section className="mx-auto max-w-2xl px-6 py-16">
@@ -46,7 +47,9 @@ export default async function Home(): Promise<React.ReactElement> {
           {user.email} · {roles[user.role.name]}
         </p>
         <p className="my-6 text-sm text-[var(--color-text-secondary)]">
-          Los módulos de Transportes Guatemala se habilitarán en las próximas etapas.
+          {user.role.name === "SUCURSAL_ADMIN"
+            ? "Selecciona en la barra la sucursal que vas a administrar y registra sus buses y choferes. El módulo de viajes se habilitará en una próxima etapa."
+            : "Los módulos de Transportes Guatemala se habilitarán en las próximas etapas."}
         </p>
         <form action="/api/auth/logout" method="post">
           <Button type="submit" variant="outline">

@@ -92,3 +92,8 @@ logs/
 # Miscellaneous
 session.json
 .eslintcache
+
+/.next-admin-check/
+/.next-branches-check/
+/.next-map-check/
+/.next-build/

@@ -1,8 +1,6 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,11 +10,7 @@ export default function ForgotPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<TransportForgotPassword>({ resolver: zodResolver(TransportForgotPasswordSchema) });
+  const [emailError, setEmailError] = useState("");
   async function submit(data: TransportForgotPassword) {
     setBusy(true);
     setMessage("");
@@ -46,7 +40,12 @@ export default function ForgotPasswordPage() {
       </p>
       <form
         onSubmit={(event) => {
-          void handleSubmit(submit)(event);
+          event.preventDefault();
+          const parsed = TransportForgotPasswordSchema.safeParse(
+            Object.fromEntries(new FormData(event.currentTarget)),
+          );
+          setEmailError(parsed.success ? "" : "Ingresa un correo electrónico válido.");
+          if (parsed.success) void submit(parsed.data);
         }}
         noValidate
         className="space-y-4"
@@ -57,13 +56,13 @@ export default function ForgotPasswordPage() {
           type="email"
           autoComplete="email"
           disabled={busy}
-          aria-invalid={!!errors.email}
-          aria-describedby={errors.email ? "recovery-email-error" : undefined}
-          {...register("email")}
+          aria-invalid={!!emailError}
+          aria-describedby={emailError ? "recovery-email-error" : undefined}
+          name="email"
         />
-        {errors.email && (
+        {emailError && (
           <p id="recovery-email-error" role="alert" className="text-sm text-red-600">
-            {errors.email.message}
+            {emailError}
           </p>
         )}
         {message && (

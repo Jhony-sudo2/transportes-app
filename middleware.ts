@@ -9,6 +9,35 @@ const publicApis = [
 ];
 export function middleware(request: NextRequest): NextResponse {
   const path = request.nextUrl.pathname;
+  if (
+    path === "/admin/sucursales" ||
+    path === "/api/admin/branches" ||
+    /^\/api\/admin\/branches\/[^/]+$/.test(path) ||
+    path === "/api/admin/locations"
+  ) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    return response;
+  }
+  if (
+    path === "/admin/usuarios" ||
+    path === "/api/admin/users" ||
+    path === "/api/admin/roles" ||
+    path === "/api/branch-admin/context" ||
+    path === "/api/branch-admin/buses" ||
+    path === "/api/branch-admin/drivers" ||
+    path === "/api/branch-admin/license-types" ||
+    /^\/api\/branch-admin\/drivers\/[^/]+\/operations\/[^/]+$/.test(path) ||
+    path === "/sucursal/buses" ||
+    path === "/sucursal/choferes" ||
+    path === "/sucursal/buses/nuevo" ||
+    path === "/sucursal/choferes/nuevo"
+  ) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
   if (publicPages.includes(path) || publicApis.includes(path)) {
     const response = NextResponse.next();
     response.headers.set("Referrer-Policy", "no-referrer");

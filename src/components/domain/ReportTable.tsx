@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-interface Column<T> {
+export interface Column<T> {
   key: keyof T;
   header: string;
   render?: (value: T[keyof T], row: T) => React.ReactNode;
@@ -61,10 +61,7 @@ export function ReportTable<T extends Record<string, unknown>>({
                 )}
               >
                 {columns.map((col) => (
-                  <td
-                    key={String(col.key)}
-                    className="px-4 py-3 text-[var(--color-text-primary)]"
-                  >
+                  <td key={String(col.key)} className="px-4 py-3 text-[var(--color-text-primary)]">
                     {col.render !== undefined
                       ? col.render(row[col.key], row)
                       : String(row[col.key] ?? "")}

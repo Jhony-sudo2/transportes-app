@@ -59,7 +59,9 @@ export const TransportUserSchema = z.object({
   email: z.string().email(),
   role: z.object({
     id: z.number().int(),
-    name: z.enum(["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "DRIVER"]),
+    name: z
+      .enum(["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "DRIVER", "CAJERO", "CASHIER"])
+      .transform((role) => (role === "CASHIER" ? ("CAJERO" as const) : role)),
   }),
   isActive: z.boolean(),
   name: z.string(),

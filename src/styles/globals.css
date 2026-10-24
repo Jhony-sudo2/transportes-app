@@ -695,3 +695,13 @@ a.tg-back-link:hover {
     line-height: 2;
   }
 }
+
+.transport-app .tg-brand {
+  color: var(--tg-ink);
+}
+.tg-nav nav a {
+  color: inherit;
+}
+.tg-form-links a {
+  color: var(--tg-green);
+}
