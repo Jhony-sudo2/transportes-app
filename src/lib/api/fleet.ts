@@ -3,6 +3,12 @@ import { ApplicationError } from "@/types/error";
 type FleetPath =
   | "buses"
   | "drivers"
+  | "drivers/me"
+  | `drivers/${number}`
+  | `drivers/${number}/salary`
+  | `buses/${number}`
+  | `buses/${number}/disponibilidad`
+  | `drivers/${number}/disponibilidad?active=${boolean}`
   | "licenses/types"
   | `branches/${number}/drivers`
   | `branches/${number}/buses`
@@ -15,7 +21,7 @@ export async function fleetRequest(
   path: FleetPath,
   token: string,
   body?: unknown,
-  method: "GET" | "POST" | "PUT" = body === undefined ? "GET" : "POST",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = body === undefined ? "GET" : "POST",
 ): Promise<unknown> {
   const base = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
   const multipart = body instanceof FormData;
@@ -100,6 +106,7 @@ export async function fleetRequest(
       message,
     );
   }
+  if (response.status === 204) return null;
   try {
     return await response.json();
   } catch {

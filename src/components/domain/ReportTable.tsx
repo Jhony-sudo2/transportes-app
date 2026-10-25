@@ -10,12 +10,14 @@ interface ReportTableProps<T extends Record<string, unknown>> {
   columns: Column<T>[];
   data: T[];
   caption?: string;
+  getRowKey?: (row: T) => string | number;
 }
 
 export function ReportTable<T extends Record<string, unknown>>({
   columns,
   data,
   caption,
+  getRowKey,
 }: ReportTableProps<T>): React.ReactElement {
   return (
     <div
@@ -53,7 +55,7 @@ export function ReportTable<T extends Record<string, unknown>>({
           ) : (
             data.map((row, rowIndex) => (
               <tr
-                key={rowIndex}
+                key={getRowKey ? getRowKey(row) : rowIndex}
                 className={cn(
                   "border-b border-[var(--color-border)] transition-colors duration-150",
                   "hover:bg-[var(--color-surface-hover)]",

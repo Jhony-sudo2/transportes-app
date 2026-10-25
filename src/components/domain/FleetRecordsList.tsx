@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 import { RotateCw, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,17 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ReportTable, type Column } from "./ReportTable";
 import { readFleetResponse } from "@/lib/fleet-ui";
+import { useBranchWorkspace } from "@/components/layout/BranchWorkspaceProvider";
+import type { FleetAvailability } from "@/lib/fleet-availability";
+export type FleetRecordsActions<T> = {
+  update: (record: T) => void;
+  remove: (id: number) => void;
+  refresh: () => void;
+  notify: (message: string) => void;
+};
 type Props<T extends { id: number } & Record<string, unknown>> = {
   branchId: number;
   resource: "buses" | "drivers";
   schema: z.ZodType<T[], z.ZodTypeDef, unknown>;
-  columns: Column<T>[];
+  columns: Column<T>[] | ((actions: FleetRecordsActions<T>) => Column<T>[]);
   caption: string;
   emptyMessage: string;
   searchLabel: string;
   searchText: (record: T) => string;
   recordStatus: (record: T) => string;
   statusLabels: Record<string, string>;
+  availability?: (record: T) => FleetAvailability;
+  recordNoun?: string;
+  recordLabel: (record: T) => string;
 };
 const normalize = (text: string) =>
   text
@@ -36,7 +47,15 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
   searchText,
   recordStatus,
   statusLabels,
+  availability,
+  recordNoun,
+  recordLabel,
 }: Props<T>) {
+  const { busy, setBusy } = useBranchWorkspace();
+  const updating = useRef(false);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState("");
   const [records, setRecords] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -77,6 +96,86 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
     })();
     return () => controller.abort();
   }, [branchId, resource, schema, retry]);
+  async function changeAvailability(record: T) {
+    const current = availability?.(record);
+    if (!availability || !current || updating.current || busy || current.active === null) return;
+    const active = !current.active;
+    updating.current = true;
+    setBusy(true);
+    setSavingId(record.id);
+    setActionError("");
+    setNotice("");
+    try {
+      const body = await readFleetResponse(
+        await fetch(`/api/branch-admin/${resource}/${record.id}/availability`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ branchId, active }),
+        }),
+      );
+      if (
+        !body ||
+        typeof body !== "object" ||
+        !("item" in body) ||
+        !("branchId" in body) ||
+        body.branchId !== branchId
+      )
+        throw new Error("No se pudo confirmar el cambio.");
+      const parsed = schema.safeParse([body.item]);
+      const item = parsed.success ? parsed.data[0] : undefined;
+      if (!item || item.id !== record.id || availability(item).active !== active)
+        throw new Error("La respuesta no confirma el estado solicitado.");
+      setRecords((previous) => previous.map((entry) => (entry.id === item.id ? item : entry)));
+      setNotice(`${recordLabel(item)}: ${active ? "activado" : "desactivado"}.`);
+    } catch (cause) {
+      setActionError(
+        (cause instanceof Error ? cause.message : "No se pudo confirmar el cambio.") +
+          " Se volverá a consultar el listado para verificar su estado.",
+      );
+      setRetry((value) => value + 1);
+    } finally {
+      updating.current = false;
+      setSavingId(null);
+      setBusy(false);
+    }
+  }
+
+  const actionColumn: Column<T> = {
+    key: "id",
+    header: "Disponibilidad",
+    render: (_value, record) => {
+      const current = availability?.(record);
+      if (!current) return null;
+      return current.active === null ? (
+        <p className="max-w-48 text-xs text-[var(--tg-muted)]">{current.reason}</p>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy || loading}
+          aria-label={`${current.active ? "Desactivar" : "Activar"} ${recordLabel(record)}`}
+          onClick={() => void changeAvailability(record)}
+        >
+          {savingId === record.id ? "Guardando…" : current.active ? "Desactivar" : "Activar"}
+        </Button>
+      );
+    },
+  };
+  const tableColumns =
+    typeof columns === "function"
+      ? columns({
+          update: (record) =>
+            setRecords((current) => current.map((item) => (item.id === record.id ? record : item))),
+          remove: (id) => setRecords((current) => current.filter((item) => item.id !== id)),
+          refresh: () => setRetry((current) => current + 1),
+          notify: (text) => {
+            setNotice(text);
+            setActionError("");
+          },
+        })
+      : columns;
+  const noun = recordNoun ?? (resource === "buses" ? "buses" : "choferes");
   const filtered = useMemo(
     () =>
       records.filter(
@@ -105,7 +204,7 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
               <Input
                 id={"fleet-search-" + resource}
                 value={query}
-                disabled={loading || !!error}
+                disabled={loading || busy || !!error}
                 onChange={(event) => {
                   setQuery(event.target.value);
                   setPage(1);
@@ -120,7 +219,7 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
             <select
               id={"fleet-status-" + resource}
               value={status}
-              disabled={loading || !!error}
+              disabled={loading || busy || !!error}
               onChange={(event) => {
                 setStatus(event.target.value);
                 setPage(1);
@@ -139,16 +238,26 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
         <Button
           type="button"
           variant="outline"
-          disabled={loading}
+          disabled={loading || busy}
           onClick={() => setRetry((value) => value + 1)}
         >
           <RotateCw size={15} aria-hidden="true" />
           Actualizar listado
         </Button>
       </div>
+      {notice && (
+        <p role="status" className="tg-notice">
+          {notice}
+        </p>
+      )}
+      {actionError && (
+        <p role="alert" className="rounded-xl border border-red-300 p-4 text-sm">
+          {actionError}
+        </p>
+      )}
       {loading ? (
         <p role="status" className="tg-notice">
-          Cargando {resource === "buses" ? "buses" : "choferes"} de la sucursal…
+          Cargando {noun} de la sucursal…
         </p>
       ) : error ? (
         <div role="alert" className="space-y-3 rounded-xl border border-red-300 p-5 text-sm">
@@ -160,7 +269,7 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
       ) : (
         <>
           <p role="status" className="text-sm text-[var(--tg-muted)]">
-            {filtered.length} de {records.length} {resource === "buses" ? "buses" : "choferes"}
+            {filtered.length} de {records.length} {noun}
           </p>
           {!records.length ? (
             <p className="rounded-xl border border-dashed border-[var(--tg-line)] bg-[var(--tg-paper)] p-8 text-center text-sm text-[var(--tg-muted)]">
@@ -171,7 +280,12 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
               No hay coincidencias con la búsqueda o el estado seleccionado.
             </p>
           ) : (
-            <ReportTable columns={columns} data={visible} caption={caption} />
+            <ReportTable
+              columns={availability ? [...tableColumns, actionColumn] : tableColumns}
+              data={visible}
+              caption={caption}
+              getRowKey={(record) => record.id}
+            />
           )}
           {filtered.length > 10 && (
             <nav
@@ -182,7 +296,7 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={currentPage === 1}
+                disabled={busy || currentPage === 1}
                 onClick={() => setPage(currentPage - 1)}
               >
                 <ChevronLeft size={15} aria-hidden="true" />
@@ -195,7 +309,7 @@ export function FleetRecordsList<T extends { id: number } & Record<string, unkno
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={currentPage === pageCount}
+                disabled={busy || currentPage === pageCount}
                 onClick={() => setPage(currentPage + 1)}
               >
                 Siguiente

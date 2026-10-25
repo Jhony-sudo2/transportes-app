@@ -1,8 +1,11 @@
 "use client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { FleetRecordsList } from "./FleetRecordsList";
+import { FleetRecordsList, type FleetRecordsActions } from "./FleetRecordsList";
+import { DriverSalaryDialog, DeleteDriverRequestDialog } from "./DriverManagementDialogs";
+import { canDeleteDriverRequest } from "@/lib/driver-management";
 import type { Column } from "./ReportTable";
+import { busAvailability, driverAvailability } from "@/lib/fleet-availability";
 import {
   BusListSchema,
   DriverListSchema,
@@ -31,9 +34,16 @@ const driverStatuses: Record<string, string> = {
   ACCOUNT_REJECTED: "Registro rechazado",
   UNKNOWN: "Sin estado",
 };
+const requestStatuses = {
+  ...driverStatuses,
+  ACTIVE: "Confirmada",
+  INACTIVE: "Confirmada (inactivo)",
+};
 const busStatus = (bus: BusListRecord) => bus.state || "UNKNOWN";
 const driverStatus = (driver: DriverListRecord) =>
   driver.status ?? (driver.active ? "ACTIVE" : "UNKNOWN");
+const busLabel = (bus: BusListRecord) => `Bus ${bus.plateNumber}`;
+const driverLabel = (driver: DriverListRecord) => `chofer ${driver.name} ${driver.lastName}`;
 const busSearch = (bus: BusListRecord) =>
   [bus.plateNumber, bus.brand, bus.model, bus.yearManufacture].join(" ");
 const driverSearch = (driver: DriverListRecord) =>
@@ -44,6 +54,7 @@ const driverSearch = (driver: DriverListRecord) =>
     driver.phone,
     driver.number,
     driver.licenseTypeName,
+    driver.failureReason,
   ].join(" ");
 function StatusBadge({ status, labels }: { status: string; labels: Record<string, string> }) {
   const color = ["ACTIVE", "AVAILABLE"].includes(status)
@@ -100,9 +111,16 @@ const busColumns: Column<BusListRecord>[] = [
     render: (_value, bus) => <StatusBadge status={busStatus(bus)} labels={busStatuses} />,
   },
 ];
-function DriverList({ branch }: { branch: { id: number; name: string } }) {
-  const columns: Column<DriverListRecord>[] = [
-    {
+function DriverList({
+  branch,
+  view,
+}: {
+  branch: { id: number; name: string };
+  view: "all" | "requests";
+}) {
+  const requests = view === "requests";
+  const columns = (actions: FleetRecordsActions<DriverListRecord>): Column<DriverListRecord>[] => {
+    const identity: Column<DriverListRecord> = {
       key: "name",
       header: "Chofer",
       render: (_value, driver) => (
@@ -115,44 +133,8 @@ function DriverList({ branch }: { branch: { id: number; name: string } }) {
           </p>
         </div>
       ),
-    },
-    { key: "phone", header: "Teléfono", render: (_value, driver) => driver.phone || "—" },
-    {
-      key: "number",
-      header: "Licencia",
-      render: (_value, driver) => (
-        <div className="min-w-36">
-          <p>
-            {driver.number || "—"}
-            {driver.licenseTypeName ? " · " + driver.licenseTypeName : ""}
-          </p>
-          <p className="mt-1 text-xs text-[var(--tg-muted)]">
-            Vence: {displayDate(driver.expirationDate)}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: "baseSalary",
-      header: "Salario base",
-      render: (_value, driver) =>
-        driver.baseSalary == null ? "—" : salary.format(driver.baseSalary),
-    },
-    {
-      key: "status",
-      header: "Estado",
-      render: (_value, driver) => (
-        <div className="space-y-2">
-          <StatusBadge status={driverStatus(driver)} labels={driverStatuses} />
-          {driver.failureReason && (
-            <p className="max-w-64 break-words text-xs text-[var(--tg-muted)]">
-              {driver.failureReason}
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
+    };
+    const followUp: Column<DriverListRecord> = {
       key: "pendingOperationId",
       header: "Seguimiento",
       render: (_value, driver) =>
@@ -169,29 +151,122 @@ function DriverList({ branch }: { branch: { id: number; name: string } }) {
         ) : (
           <span className="text-[var(--tg-muted)]">—</span>
         ),
-    },
-  ];
+    };
+    if (requests)
+      return [
+        identity,
+        {
+          key: "status",
+          header: "Estado de la solicitud",
+          render: (_value, driver) => (
+            <StatusBadge status={driverStatus(driver)} labels={requestStatuses} />
+          ),
+        },
+        {
+          key: "failureReason",
+          header: "Motivo del rechazo",
+          render: (_value, driver) => (
+            <p className="min-w-40 max-w-80 break-words text-sm">
+              {driver.failureReason ||
+                (driver.status === "ACCOUNT_REJECTED"
+                  ? "No se recibió un detalle del rechazo."
+                  : "—")}
+            </p>
+          ),
+        },
+        followUp,
+        {
+          key: "id",
+          header: "Acciones",
+          render: (_value, driver) =>
+            canDeleteDriverRequest(driver) ? (
+              <DeleteDriverRequestDialog driver={driver} branchId={branch.id} actions={actions} />
+            ) : (
+              <span className="text-xs text-[var(--tg-muted)]">
+                {driver.status === "PENDING" ? "Esperando confirmación" : "—"}
+              </span>
+            ),
+        },
+      ];
+    return [
+      identity,
+      { key: "phone", header: "Teléfono", render: (_value, driver) => driver.phone || "—" },
+      {
+        key: "number",
+        header: "Licencia",
+        render: (_value, driver) => (
+          <div className="min-w-36">
+            <p>
+              {driver.number || "—"}
+              {driver.licenseTypeName ? " · " + driver.licenseTypeName : ""}
+            </p>
+            <p className="mt-1 text-xs text-[var(--tg-muted)]">
+              Vence: {displayDate(driver.expirationDate)}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "baseSalary",
+        header: "Salario base",
+        render: (_value, driver) => (
+          <div className="space-y-3">
+            <p>{driver.baseSalary == null ? "—" : salary.format(driver.baseSalary)}</p>
+            {driverAvailability(driver).active !== null && (
+              <DriverSalaryDialog driver={driver} branchId={branch.id} actions={actions} />
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "status",
+        header: "Estado",
+        render: (_value, driver) => (
+          <div className="space-y-2">
+            <StatusBadge status={driverStatus(driver)} labels={driverStatuses} />
+            {driver.failureReason && (
+              <p className="max-w-64 break-words text-xs text-[var(--tg-muted)]">
+                {driver.failureReason}
+              </p>
+            )}
+          </div>
+        ),
+      },
+      followUp,
+    ];
+  };
   return (
     <FleetRecordsList
       branchId={branch.id}
       resource="drivers"
       schema={DriverListSchema}
       columns={columns}
-      caption={"Choferes de " + branch.name}
-      emptyMessage="Aún no hay choferes registrados en esta sucursal."
-      searchLabel="Buscar por nombre, correo o licencia"
+      caption={(requests ? "Solicitudes de " : "Choferes de ") + branch.name}
+      emptyMessage={
+        requests
+          ? "Aún no hay solicitudes de choferes en esta sucursal."
+          : "Aún no hay choferes registrados en esta sucursal."
+      }
+      searchLabel={
+        requests ? "Buscar por nombre, correo o motivo" : "Buscar por nombre, correo o licencia"
+      }
       searchText={driverSearch}
       recordStatus={driverStatus}
-      statusLabels={driverStatuses}
+      statusLabels={requests ? requestStatuses : driverStatuses}
+      recordNoun={requests ? "solicitudes" : "choferes"}
+      {...(!requests ? { availability: driverAvailability } : {})}
+      recordLabel={driverLabel}
     />
   );
 }
 export function FleetListClient({
   kind,
   branch,
+  driverView = "all",
 }: {
   kind: "bus" | "driver";
   branch: { id: number; name: string };
+  driverView?: "all" | "requests";
 }) {
   return kind === "bus" ? (
     <FleetRecordsList
@@ -205,8 +280,10 @@ export function FleetListClient({
       searchText={busSearch}
       recordStatus={busStatus}
       statusLabels={busStatuses}
+      availability={busAvailability}
+      recordLabel={busLabel}
     />
   ) : (
-    <DriverList branch={branch} />
+    <DriverList branch={branch} view={driverView} />
   );
 }

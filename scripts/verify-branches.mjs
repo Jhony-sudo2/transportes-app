@@ -46,6 +46,14 @@ let receivedBus = null,
   driverWrites = 0,
   operationReads = 0;
 let driverListReads = 0;
+let busAvailabilityWrites = 0,
+  driverAvailabilityWrites = 0,
+  busAvailabilityAttempts = 0;
+let failNextBusAvailability = false;
+let salaryWrites = 0,
+  deleteAttempts = 0,
+  deleteWrites = 0,
+  failNextDelete = true;
 const storedBuses = Array.from({ length: 12 }, (_, i) => ({
   id: 100 + i,
   branchId: 1,
@@ -114,6 +122,79 @@ const api = http.createServer(async (request, response) => {
     return;
   }
 
+  const salaryPath = request.url.match(/^\/api\/v1\/drivers\/(\d+)\/salary$/);
+  if (salaryPath && request.method === "PATCH") {
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    const data = JSON.parse(raw);
+    assert.deepEqual(Object.keys(data), ["baseSalary"]);
+    const driver = storedDrivers.find((record) => record.id === Number(salaryPath[1]));
+    assert.ok(driver);
+    salaryWrites++;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    driver.baseSalary = data.baseSalary;
+    send(driver);
+    return;
+  }
+  const deletePath = request.url.match(/^\/api\/v1\/drivers\/(\d+)$/);
+  if (deletePath && request.method === "DELETE") {
+    deleteAttempts++;
+    if (failNextDelete) {
+      failNextDelete = false;
+      send({ detail: "Error temporal de eliminación" }, 503);
+      return;
+    }
+    const index = storedDrivers.findIndex((record) => record.id === Number(deletePath[1]));
+    assert.ok(index >= 0);
+    assert.equal(storedDrivers[index].status, "ACCOUNT_REJECTED");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    storedDrivers.splice(index, 1);
+    deleteWrites++;
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+  const availabilityPath = request.url.match(
+    /^\/api\/v1\/(buses|drivers)\/(\d+)\/disponibilidad(?:\?active=(true|false))?$/,
+  );
+  if (availabilityPath && request.method === "PATCH") {
+    const [, resource, rawId, queryActive] = availabilityPath;
+    const id = Number(rawId);
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    const active = resource === "buses" ? JSON.parse(raw).active : queryActive === "true";
+    if (resource === "buses") {
+      assert.deepEqual(Object.keys(JSON.parse(raw)), ["active"]);
+      busAvailabilityAttempts++;
+      if (failNextBusAvailability) {
+        failNextBusAvailability = false;
+        send({ detail: "Error temporal de flota" }, 503);
+        return;
+      }
+      const bus = storedBuses.find((record) => record.id === id);
+      assert.ok(bus);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      bus.state = active ? "AVAILABLE" : "OUT_OF_SERVICE";
+      busAvailabilityWrites++;
+      response.writeHead(204);
+      response.end();
+    } else {
+      assert.equal(raw, "");
+      const driver = storedDrivers.find((record) => record.id === id);
+      assert.ok(driver);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      driver.status = active ? "ACTIVE" : "INACTIVE";
+      driver.active = active;
+      driverAvailabilityWrites++;
+      send(driver);
+    }
+    return;
+  }
+  if (/^\/api\/v1\/buses\/\d+$/.test(request.url) && request.method === "GET") {
+    const bus = storedBuses.find((record) => record.id === Number(request.url.split("/")[4]));
+    send(bus ?? {}, bus ? 200 : 404);
+    return;
+  }
   if (request.url === "/api/v1/licenses/types") {
     send([
       { id: 1, name: "A" },
@@ -208,6 +289,7 @@ const api = http.createServer(async (request, response) => {
         driver.status = "ACTIVE";
         driver.pendingOperationId = null;
         driver.active = true;
+        driver.userId = 321;
       }
     }
     send({
@@ -627,6 +709,41 @@ try {
     path: "test-results/fleet-buses-list-desktop.png",
     fullPage: true,
   });
+  failNextBusAvailability = true;
+  await managerPage.getByRole("button", { name: "Desactivar Bus C123ABC", exact: true }).click();
+  await expect(
+    managerPage.getByRole("alert").filter({ hasText: "Se volverá a consultar el listado" }),
+  ).toBeVisible();
+  await expect(
+    managerPage.getByRole("button", { name: "Desactivar Bus C123ABC", exact: true }),
+  ).toBeEnabled();
+  assert.equal(busAvailabilityWrites, 0);
+  assert.equal(busAvailabilityAttempts, 1);
+  await managerPage
+    .getByRole("button", { name: "Desactivar Bus C123ABC", exact: true })
+    .evaluate((element) => {
+      element.click();
+      element.click();
+    });
+  await expect(managerPage.getByLabel("Administrar sucursal")).toBeDisabled();
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "Bus C123ABC: desactivado." }),
+  ).toBeVisible();
+  assert.equal(busAvailabilityWrites, 1);
+  assert.equal(busAvailabilityAttempts, 2);
+  await expect(busTable.getByText("C123ABC", { exact: true })).toHaveCount(0);
+  await managerPage.getByLabel("Estado", { exact: true }).selectOption("");
+  await expect(busTable.getByText("Fuera de servicio", { exact: true })).toBeVisible();
+  await managerPage.reload();
+  await expect(
+    managerPage.getByRole("button", { name: "Activar Bus C123ABC", exact: true }),
+  ).toBeVisible();
+  await managerPage.getByRole("button", { name: "Activar Bus C123ABC", exact: true }).click();
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "Bus C123ABC: activado." }),
+  ).toBeVisible();
+  await expect(busTable.getByText("Disponible", { exact: true })).toBeVisible();
+  assert.equal(busAvailabilityWrites, 2);
   let failList = true;
   await managerPage.route("**/api/branch-admin/buses?branchId=1", (route) => {
     if (failList) {
@@ -701,6 +818,266 @@ try {
     path: "test-results/fleet-drivers-list-desktop.png",
     fullPage: true,
   });
+  await expect(
+    driverTable.getByRole("row").filter({ hasText: "Carlos Rechazado" }).getByRole("button"),
+  ).toHaveCount(0);
+  await expect(
+    driverTable.getByRole("row").filter({ hasText: "Rosa Pendiente" }).getByRole("button"),
+  ).toHaveCount(0);
+  await managerPage.getByLabel("Estado", { exact: true }).selectOption("ACTIVE");
+  await managerPage
+    .getByRole("button", { name: "Desactivar chofer Ana Lopez", exact: true })
+    .evaluate((element) => {
+      element.click();
+      element.click();
+    });
+  await expect(managerPage.getByLabel("Administrar sucursal")).toBeDisabled();
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "chofer Ana Lopez: desactivado." }),
+  ).toBeVisible();
+  assert.equal(driverAvailabilityWrites, 1);
+  await expect(driverTable.getByText("Ana Lopez", { exact: true })).toHaveCount(0);
+  await managerPage.getByLabel("Estado", { exact: true }).selectOption("INACTIVE");
+  await expect(driverTable.getByText("Inactivo", { exact: true })).toBeVisible();
+  await managerPage.reload();
+  await expect(
+    managerPage.getByRole("button", { name: "Activar chofer Ana Lopez", exact: true }),
+  ).toBeVisible();
+  await managerPage.getByRole("button", { name: "Activar chofer Ana Lopez", exact: true }).click();
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "chofer Ana Lopez: activado." }),
+  ).toBeVisible();
+  await expect(driverTable.getByText("Activo", { exact: true })).toBeVisible();
+  assert.equal(driverAvailabilityWrites, 2);
+  for (const [resource, id] of [
+    ["buses", 4],
+    ["drivers", 31],
+  ]) {
+    assert.equal(
+      (
+        await customer.request.patch(base + `/api/branch-admin/${resource}/${id}/availability`, {
+          headers: { Origin: base },
+          data: { branchId: 2, active: false },
+        })
+      ).status(),
+      403,
+    );
+  }
+  assert.equal(
+    (
+      await manager.request.patch(base + "/api/branch-admin/buses/100/availability", {
+        headers: { Origin: base },
+        data: { branchId: 2, active: false },
+      })
+    ).status(),
+    403,
+  );
+  assert.equal(
+    (
+      await manager.request.patch(base + "/api/branch-admin/drivers/33/availability", {
+        headers: { Origin: base },
+        data: { branchId: 2, active: false },
+      })
+    ).status(),
+    409,
+  );
+  assert.equal(busAvailabilityWrites, 2);
+  assert.equal(driverAvailabilityWrites, 2);
+  await managerPage.setViewportSize({ width: 390, height: 844 });
+  await managerPage
+    .getByRole("button", { name: "Actualizar salario de Ana Lopez", exact: true })
+    .click();
+  let salaryDialog = managerPage.getByRole("dialog", {
+    name: "Actualizar salario base",
+    exact: true,
+  });
+  await expect(salaryDialog.getByLabel("Nuevo salario base (Q)", { exact: true })).toHaveValue(
+    "5000",
+  );
+  await salaryDialog.getByLabel("Nuevo salario base (Q)", { exact: true }).fill("6500");
+  assert.equal(
+    await managerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    true,
+  );
+  await managerPage.screenshot({ path: "test-results/driver-salary-mobile.png", fullPage: true });
+  await salaryDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  assert.equal(salaryWrites, 0);
+  await managerPage.setViewportSize({ width: 1440, height: 1100 });
+  await managerPage
+    .getByRole("button", { name: "Actualizar salario de Ana Lopez", exact: true })
+    .click();
+  salaryDialog = managerPage.getByRole("dialog", { name: "Actualizar salario base", exact: true });
+  await expect(salaryDialog.getByLabel("Nuevo salario base (Q)", { exact: true })).toHaveValue(
+    "5000",
+  );
+  await salaryDialog.getByLabel("Nuevo salario base (Q)", { exact: true }).fill("0");
+  await salaryDialog.getByRole("button", { name: "Guardar salario", exact: true }).click();
+  await expect(salaryDialog.getByRole("alert")).toContainText("mayor que cero");
+  assert.equal(salaryWrites, 0);
+  await salaryDialog.getByLabel("Nuevo salario base (Q)", { exact: true }).fill("6210.75");
+  await salaryDialog
+    .getByRole("button", { name: "Guardar salario", exact: true })
+    .evaluate((button) => {
+      button.click();
+      button.click();
+    });
+  await expect(managerPage.locator("#managed-branch")).toBeDisabled();
+  await expect(salaryDialog).toHaveCount(0);
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "Salario de Ana Lopez actualizado." }),
+  ).toBeVisible();
+  assert.equal(salaryWrites, 1);
+  await expect(driverTable.getByRole("row").filter({ hasText: "Ana Lopez" })).toContainText(
+    "6,210.75",
+  );
+  await managerPage.reload();
+  await expect(driverTable.getByRole("row").filter({ hasText: "Ana Lopez" })).toContainText(
+    "6,210.75",
+  );
+  assert.equal(
+    (
+      await customer.request.patch(base + "/api/branch-admin/drivers/31/salary", {
+        headers: { Origin: base },
+        data: { branchId: 2, baseSalary: 7000 },
+      })
+    ).status(),
+    403,
+  );
+  assert.equal(
+    (
+      await manager.request.delete(base + "/api/branch-admin/drivers/31?branchId=2", {
+        headers: { Origin: base },
+      })
+    ).status(),
+    409,
+  );
+  assert.equal(
+    (
+      await manager.request.delete(base + "/api/branch-admin/drivers/33?branchId=2", {
+        headers: { Origin: base },
+      })
+    ).status(),
+    409,
+  );
+  assert.equal(
+    (
+      await manager.request.delete(base + "/api/branch-admin/drivers/99?branchId=2", {
+        headers: { Origin: base },
+      })
+    ).status(),
+    403,
+  );
+  assert.equal(
+    (
+      await customer.request.delete(base + "/api/branch-admin/drivers/32?branchId=2", {
+        headers: { Origin: base },
+      })
+    ).status(),
+    403,
+  );
+  assert.equal(deleteAttempts, 0);
+
+  await managerPage.getByRole("link", { name: "Solicitudes de registro", exact: true }).click();
+  await expect(
+    managerPage.getByRole("heading", { name: "Solicitudes de choferes.", exact: true }),
+  ).toBeVisible();
+  const requestsTable = managerPage.getByRole("table", {
+    name: "Solicitudes de Sucursal renovada",
+    exact: true,
+  });
+  await expect(requestsTable.getByText("Correo ya registrado", { exact: true })).toBeVisible();
+  await expect(
+    requestsTable.getByRole("row").filter({ hasText: "Rosa Pendiente" }).getByRole("button"),
+  ).toHaveCount(0);
+  await expect(
+    requestsTable.getByRole("row").filter({ hasText: "Ana Lopez" }).getByRole("button"),
+  ).toHaveCount(0);
+  await managerPage
+    .getByLabel("Buscar por nombre, correo o motivo", { exact: true })
+    .fill("correo ya registrado");
+  await expect(
+    requestsTable.getByRole("row").filter({ hasText: "Carlos Rechazado" }),
+  ).toBeVisible();
+  await expect(requestsTable.getByText("Ana Lopez", { exact: true })).toHaveCount(0);
+  await managerPage.getByLabel("Buscar por nombre, correo o motivo", { exact: true }).fill("");
+  await managerPage.screenshot({
+    path: "test-results/driver-requests-desktop.png",
+    fullPage: true,
+  });
+  await managerPage.setViewportSize({ width: 390, height: 844 });
+  assert.equal(
+    await managerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    true,
+  );
+  await managerPage.screenshot({ path: "test-results/driver-requests-mobile.png", fullPage: true });
+  await managerPage.getByLabel("Estado", { exact: true }).selectOption("ACCOUNT_REJECTED");
+  await requestsTable
+    .getByRole("button", { name: "Eliminar solicitud de Carlos Rechazado", exact: true })
+    .click();
+  let deleteDialog = managerPage.getByRole("dialog", {
+    name: "Eliminar solicitud rechazada",
+    exact: true,
+  });
+  await expect(deleteDialog.getByText("Correo ya registrado", { exact: true })).toBeVisible();
+  await managerPage.screenshot({
+    path: "test-results/delete-driver-request-mobile.png",
+    fullPage: true,
+  });
+  await deleteDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  assert.equal(deleteAttempts, 0);
+  await requestsTable
+    .getByRole("button", { name: "Eliminar solicitud de Carlos Rechazado", exact: true })
+    .click();
+  deleteDialog = managerPage.getByRole("dialog", {
+    name: "Eliminar solicitud rechazada",
+    exact: true,
+  });
+  await deleteDialog.getByRole("button", { name: "Confirmar eliminación", exact: true }).click();
+  await expect(deleteDialog.getByRole("alert")).toContainText(
+    "Al cerrar se consultará nuevamente el listado",
+  );
+  assert.equal(deleteWrites, 0);
+  assert.equal(deleteAttempts, 1);
+  await deleteDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(requestsTable.getByText("Carlos Rechazado", { exact: true })).toBeVisible();
+  await requestsTable
+    .getByRole("button", { name: "Eliminar solicitud de Carlos Rechazado", exact: true })
+    .click();
+  deleteDialog = managerPage.getByRole("dialog", {
+    name: "Eliminar solicitud rechazada",
+    exact: true,
+  });
+  await deleteDialog
+    .getByRole("button", { name: "Confirmar eliminación", exact: true })
+    .evaluate((button) => {
+      button.click();
+      button.click();
+    });
+  await expect(managerPage.locator("#managed-branch")).toBeDisabled();
+  await expect(deleteDialog).toHaveCount(0);
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "Solicitud de Carlos Rechazado eliminada." }),
+  ).toBeVisible();
+  assert.equal(deleteWrites, 1);
+  assert.equal(deleteAttempts, 2);
+  await expect(
+    managerPage.getByText("No hay coincidencias con la búsqueda o el estado seleccionado."),
+  ).toBeVisible();
+  await managerPage.getByLabel("Estado", { exact: true }).selectOption("");
+  await expect(requestsTable.getByText("Carlos Rechazado", { exact: true })).toHaveCount(0);
+  await expect(requestsTable.getByText("Ana Lopez", { exact: true })).toBeVisible();
+  await managerPage.reload();
+  await expect(requestsTable.getByText("Rosa Pendiente", { exact: true })).toBeVisible();
+  await expect(requestsTable.getByText("Carlos Rechazado", { exact: true })).toHaveCount(0);
+  await managerPage.getByLabel("Administrar sucursal").selectOption("1");
+  await expect(
+    managerPage.getByText("Aún no hay solicitudes de choferes en esta sucursal.", { exact: true }),
+  ).toBeVisible();
+  await managerPage.getByLabel("Administrar sucursal").selectOption("2");
+  await expect(requestsTable.getByText("Ana Lopez", { exact: true })).toBeVisible();
+  await managerPage.getByRole("link", { name: "Listado de choferes", exact: true }).click();
+  await expect(driverTable).toBeVisible();
+  await managerPage.setViewportSize({ width: 1440, height: 1100 });
   await managerPage.getByLabel("Administrar sucursal").selectOption("1");
   await expect(
     managerPage.getByText("Aún no hay choferes registrados en esta sucursal.", { exact: true }),
@@ -767,7 +1144,7 @@ try {
   await customer.close();
   await context.close();
   process.stdout.write(
-    "PASS: clic, arrastre, decimales, guardado unico, edicion, cancelacion, recarga de marcadores, navegacion por rol, selector de sucursales, alta de bus, multipart de chofer, confirmacion pendiente/completada, listados por sucursal, busqueda, filtros, paginacion, recuperacion de errores, cierre de sesion, vista movil y permisos.\n",
+    "PASS: clic, arrastre, decimales, guardado unico, edicion, cancelacion, recarga de marcadores, navegacion por rol, selector de sucursales, alta de bus, multipart de chofer, confirmacion pendiente/completada, listados por sucursal, busqueda, filtros, paginacion, activacion/desactivacion sin envios duplicados, salario base, solicitudes rechazadas y eliminacion confirmada, recuperacion de errores, cierre de sesion, vista movil y permisos.\n",
   );
 } catch (error) {
   process.stderr.write(String(error) + "\n");

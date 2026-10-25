@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-const publicPages = ["/", "/login", "/register", "/forgot-password", "/auth/reset-password"];
+const publicPages = [
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/auth/reset-password",
+  "/auth/first-login",
+];
 const publicApis = [
   "/api/auth/login",
   "/api/auth/logout",
@@ -21,6 +28,11 @@ export function middleware(request: NextRequest): NextResponse {
     return response;
   }
   if (
+    path === "/mi-cuenta" ||
+    path === "/mi-cuenta/contrasena" ||
+    path === "/api/account/profile" ||
+    path === "/api/account/password" ||
+    /^\/api\/account\/profile\/operations\/[^/]+$/.test(path) ||
     path === "/admin/usuarios" ||
     path === "/api/admin/users" ||
     path === "/api/admin/roles" ||
@@ -28,9 +40,12 @@ export function middleware(request: NextRequest): NextResponse {
     path === "/api/branch-admin/buses" ||
     path === "/api/branch-admin/drivers" ||
     path === "/api/branch-admin/license-types" ||
+    /^\/api\/branch-admin\/drivers\/[^/]+(?:\/salary)?$/.test(path) ||
+    /^\/api\/branch-admin\/(buses|drivers)\/[^/]+\/availability$/.test(path) ||
     /^\/api\/branch-admin\/drivers\/[^/]+\/operations\/[^/]+$/.test(path) ||
     path === "/sucursal/buses" ||
     path === "/sucursal/choferes" ||
+    path === "/sucursal/choferes/solicitudes" ||
     path === "/sucursal/buses/nuevo" ||
     path === "/sucursal/choferes/nuevo"
   ) {

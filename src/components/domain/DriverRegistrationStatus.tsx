@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { readFleetResponse } from "@/lib/fleet-ui";
 import {
@@ -99,6 +100,9 @@ export function DriverRegistrationStatus({
             {checking ? "Consultando…" : "Consultar estado"}
           </Button>
         )}
+        <Button asChild variant="outline">
+          <Link href="/sucursal/choferes/solicitudes">Ver solicitudes de registro</Link>
+        </Button>
         <Button type="button" onClick={onNew}>
           Registrar otro chofer
         </Button>

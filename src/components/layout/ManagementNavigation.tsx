@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BusFront, LogOut, type LucideIcon } from "lucide-react";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
+import { AccountLinks } from "./AccountLinks";
 
 type ManagementNavItem = {
   label: string;
@@ -42,7 +43,8 @@ export function ManagementNavigation({
             {role}
           </span>
           <span className="hidden max-w-48 truncate text-[var(--tg-muted)] lg:inline">{name}</span>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <AccountLinks />
             <DarkModeToggle />
             <form action="/api/auth/logout" method="post">
               <button className="flex cursor-pointer items-center gap-2 py-2" type="submit">

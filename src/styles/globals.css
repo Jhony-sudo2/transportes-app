@@ -381,7 +381,8 @@
 }
 
 /* Identidad Transportes Guatemala: superficies cálidas, tinta azul y verde. */
-.transport-app {
+.transport-app,
+.transport-dialog {
   --tg-ink: #142f35;
   --tg-green: #176a52;
   --tg-muted: #62746e;
@@ -403,6 +404,10 @@
   --input: #cbd7ce;
   --border: #d9e2da;
   --ring: #80ad94;
+  color: var(--tg-ink);
+  font-family: var(--font-google-sans), Arial, sans-serif;
+}
+.transport-app {
   min-height: 100vh;
   background: #f3f5ee;
   color: var(--tg-ink);
@@ -636,7 +641,8 @@ a.tg-back-link:hover {
   font-size: 13px;
   line-height: 1.6;
 }
-.dark .transport-app {
+.dark .transport-app,
+.dark .transport-dialog {
   --tg-ink: #e6eee6;
   --tg-muted: #a4b7ad;
   --tg-paper: #172d30;
@@ -653,6 +659,8 @@ a.tg-back-link:hover {
   --primary: #347d62;
   --input: #345052;
   --ring: #8bceac;
+}
+.dark .transport-app {
   background: #102326;
 }
 .dark .tg-brand-mark {

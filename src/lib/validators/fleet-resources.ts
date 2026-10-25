@@ -98,6 +98,7 @@ export const BusListRecordSchema = CreatedBusSchema.extend({
   state: z.string().nullish(),
 });
 export const DriverListRecordSchema = CreatedDriverSchema.innerType().extend({
+  userId: ManagedBranchIdSchema.nullish(),
   email: z.string().nullish(),
   status: z.enum(["PENDING", "ACTIVE", "INACTIVE", "ACCOUNT_REJECTED"]).nullish(),
   pendingOperationId: z.string().nullish(),
@@ -108,6 +109,18 @@ export const DriverListRecordSchema = CreatedDriverSchema.innerType().extend({
   licenseTypeName: z.string().nullish(),
   active: z.boolean().optional(),
 });
+export const FleetAvailabilityRequestSchema = z
+  .object({
+    branchId: ManagedBranchIdSchema,
+    active: z.boolean(),
+  })
+  .strict();
+export const DriverSalaryRequestSchema = z
+  .object({
+    branchId: ManagedBranchIdSchema,
+    baseSalary: CreateDriverSchema.shape.baseSalary,
+  })
+  .strict();
 export const BusListSchema = z.array(BusListRecordSchema);
 export const DriverListSchema = z.array(DriverListRecordSchema);
 export type BusListRecord = z.infer<typeof BusListRecordSchema>;

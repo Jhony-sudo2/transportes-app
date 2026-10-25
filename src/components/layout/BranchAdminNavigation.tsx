@@ -97,7 +97,7 @@ export function BranchAdminNavigation({ name }: { name: string }) {
         href: !busy && !loading && !saving && activeBranch ? item.href : null,
         disabledReason: item.href
           ? busy
-            ? "Espera a que termine el registro."
+            ? "Espera a que termine la operación."
             : "Selecciona una sucursal para continuar."
           : "Viajes: próximamente",
       }))}

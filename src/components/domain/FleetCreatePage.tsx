@@ -11,19 +11,24 @@ import { CreateDriverForm } from "./CreateDriverForm";
 import { FleetListClient } from "./FleetListClient";
 type Props = {
   kind: "bus" | "driver";
-  view?: "create" | "list";
+  view?: "create" | "list" | "requests";
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 export async function FleetCreatePage({ kind, view = "create", searchParams }: Props) {
   const listPath = kind === "bus" ? "/sucursal/buses" : "/sucursal/choferes";
+  const isList = view !== "create";
+  const currentPath =
+    view === "requests" ? listPath + "/solicitudes" : isList ? listPath : listPath + "/nuevo";
   const title =
-    view === "list"
-      ? kind === "bus"
-        ? "Buses de tu sucursal."
-        : "Choferes de tu sucursal."
-      : kind === "bus"
-        ? "Un nuevo bus para tu sucursal."
-        : "Un nuevo chofer para el equipo.";
+    view === "requests"
+      ? "Solicitudes de choferes."
+      : isList
+        ? kind === "bus"
+          ? "Buses de tu sucursal."
+          : "Choferes de tu sucursal."
+        : kind === "bus"
+          ? "Un nuevo bus para tu sucursal."
+          : "Un nuevo chofer para el equipo.";
   try {
     const { token, branchId } = await getBranchWorkspace();
     let branch = null;
@@ -53,9 +58,9 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
           {branch && (
-            <Button asChild variant={view === "list" ? "default" : "outline"}>
-              <Link href={view === "list" ? listPath + "/nuevo" : listPath}>
-                {view === "list"
+            <Button asChild variant={isList ? "default" : "outline"}>
+              <Link href={isList ? listPath + "/nuevo" : listPath}>
+                {isList
                   ? kind === "bus"
                     ? "Crear bus"
                     : "Crear chofer"
@@ -71,9 +76,37 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
             ? `Sucursal: ${branch.name}`
             : "Elige una sucursal asignada en la barra superior para comenzar."}
         </p>
+        {kind === "driver" && isList && (
+          <nav aria-label="Opciones de choferes" className="mb-8 flex flex-wrap gap-3">
+            <Button asChild variant={view === "list" ? "default" : "outline"}>
+              <Link href={listPath} aria-current={view === "list" ? "page" : undefined}>
+                Listado de choferes
+              </Link>
+            </Button>
+            <Button asChild variant={view === "requests" ? "default" : "outline"}>
+              <Link
+                href={listPath + "/solicitudes"}
+                aria-current={view === "requests" ? "page" : undefined}
+              >
+                Solicitudes de registro
+              </Link>
+            </Button>
+          </nav>
+        )}
+        {view === "requests" && (
+          <p className="mb-6 text-sm leading-6 text-[var(--tg-muted)]">
+            Revisa las solicitudes pendientes, confirmadas y rechazadas. El motivo del rechazo te
+            ayudará a corregir los datos antes de registrar nuevamente al chofer.
+          </p>
+        )}
         {branch ? (
-          view === "list" ? (
-            <FleetListClient key={kind + "-" + branch.id} kind={kind} branch={branch} />
+          isList ? (
+            <FleetListClient
+              key={kind + "-" + view + "-" + branch.id}
+              kind={kind}
+              branch={branch}
+              driverView={view === "requests" ? "requests" : "all"}
+            />
           ) : kind === "bus" ? (
             <CreateBusForm key={branch.id} branch={branch} />
           ) : (
@@ -99,7 +132,7 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
       <section className="mx-auto max-w-3xl space-y-4 px-5 py-12">
         <h1 className="text-2xl font-semibold">{title}</h1>
         <p role="alert">No se pudo cargar la sucursal seleccionada. Inténtalo nuevamente.</p>
-        <Link href={view === "list" ? listPath : listPath + "/nuevo"} className="underline">
+        <Link href={currentPath} className="underline">
           Reintentar
         </Link>
       </section>

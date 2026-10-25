@@ -66,6 +66,10 @@ export const TransportUserSchema = z.object({
   isActive: z.boolean(),
   name: z.string(),
   lastName: z.string(),
+  phone: z.string().nullish(),
+  nit: z.string().nullish(),
+  dpi: z.string().nullish(),
+  adress: z.string().nullish(),
   twoFactorEnabled: z.boolean(),
   resetPassword: z.boolean(),
   branchIds: z.array(z.number().int()).nullish(),
@@ -111,17 +115,18 @@ export type TransportRegisterRequest = z.infer<typeof TransportRegisterRequestSc
 export const TransportForgotPasswordSchema = z.object({
   email: z.string().trim().email("Correo electrónico inválido").max(255),
 });
+export const TransportPasswordTokenSchema = z
+  .string()
+  .trim()
+  .min(1, "Abre el enlace que recibiste por correo")
+  .max(8192)
+  .regex(
+    /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+    "El enlace no es válido. Solicita uno nuevo.",
+  );
 export const TransportResetPasswordSchema = z
   .object({
-    token: z
-      .string()
-      .trim()
-      .min(1, "Abre el enlace de recuperación de tu correo")
-      .max(8192)
-      .regex(
-        /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
-        "El token de recuperación no es válido",
-      ),
+    token: TransportPasswordTokenSchema,
     password: z
       .string()
       .min(6, "Usa al menos 6 caracteres")

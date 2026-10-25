@@ -57,3 +57,133 @@ test("registro conserva formularios y diseño móvil sin desbordamiento", async 
   await page.goto("/login");
   await page.screenshot({ path: "test-results/transport-login-desktop.png", fullPage: true });
 });
+
+test("primer acceso usa el enlace de bienvenida, valida las claves y permite iniciar sesion", async ({
+  page,
+  context,
+}) => {
+  const sent: unknown[] = [];
+  const token = "welcome.payload.signature";
+  await page.route("**/api/auth/recovery/reset", async (route) => {
+    sent.push(route.request().postDataJSON());
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.fulfill({ json: { status: "reset", detail: "Contraseña actualizada" } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const response = await page.goto("/auth/first-login?token=" + token);
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
+  expect(response?.headers()["cache-control"]).toContain("no-store");
+  await expect(page).toHaveURL(/\/auth\/first-login$/);
+  await expect(
+    page.getByRole("heading", { name: "Crea tu contraseña", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Token de recuperación")).toHaveCount(0);
+  await expect(page.getByLabel("Nueva contraseña", { exact: true })).toHaveAttribute(
+    "maxlength",
+    "20",
+  );
+  await page.getByLabel("Nueva contraseña", { exact: true }).fill("corta");
+  await page.getByLabel("Confirmar contraseña").fill("corta");
+  await page.getByRole("button", { name: "Establecer contraseña", exact: true }).click();
+  await expect(
+    page.getByRole("main").getByRole("alert").filter({ hasText: "Usa al menos 6 caracteres" }),
+  ).toBeVisible();
+  expect(sent).toHaveLength(0);
+  await page.getByLabel("Nueva contraseña", { exact: true }).fill("nueva123");
+  await page.getByLabel("Confirmar contraseña").fill("diferente");
+  await page.getByRole("button", { name: "Establecer contraseña", exact: true }).click();
+  await expect(
+    page.getByRole("main").getByRole("alert").filter({ hasText: "Las contraseñas no coinciden" }),
+  ).toBeVisible();
+  expect(sent).toHaveLength(0);
+  await page.getByLabel("Confirmar contraseña").fill("nueva123");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: "test-results/first-login-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: "test-results/first-login-desktop.png", fullPage: true });
+  await page
+    .getByRole("button", { name: "Establecer contraseña", exact: true })
+    .evaluate((button: HTMLButtonElement) => {
+      button.click();
+      button.click();
+    });
+  await expect(page.getByRole("button", { name: "Guardando…", exact: true })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Contraseña creada", exact: true })).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Ya puedes iniciar sesión");
+  expect(sent).toEqual([{ token, password: "nueva123", confirmPassword: "nueva123" }]);
+  await expect(page.getByLabel("Nueva contraseña", { exact: true })).toHaveCount(0);
+  expect((await context.cookies()).some((cookie) => cookie.name === "access_token")).toBe(false);
+  expect(
+    await page.evaluate(() =>
+      JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
+    ),
+  ).not.toContain(token);
+  await page.getByRole("link", { name: "Iniciar sesión", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+for (const query of ["", "?token=1234", "?token=one.two.three&token=other.two.three"]) {
+  test("primer acceso requiere un enlace valido: " + (query || "sin token"), async ({ page }) => {
+    let writes = 0;
+    await page.route("**/api/auth/recovery/reset", async (route) => {
+      writes++;
+      await route.fulfill({ status: 400, json: {} });
+    });
+    await page.goto("/auth/first-login" + query);
+    await expect(page).toHaveURL(/\/auth\/first-login$/);
+    await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+    await expect(page.getByLabel("Nueva contraseña", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Solicitar un nuevo enlace", exact: true }),
+    ).toHaveAttribute("href", "/forgot-password");
+    await page.getByRole("link", { name: "Solicitar un nuevo enlace", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "¿Olvidaste tu contraseña?", exact: true }),
+    ).toBeVisible();
+    expect(writes).toBe(0);
+  });
+}
+
+for (const status of [401, 409]) {
+  test("primer acceso muestra enlace vencido o usado: " + status, async ({ page, context }) => {
+    await page.route("**/api/auth/recovery/reset", (route) =>
+      route.fulfill({
+        status,
+        json: { detail: "El enlace venció o ya fue utilizado. Solicita uno nuevo." },
+      }),
+    );
+    await page.goto("/auth/first-login?token=welcome.payload.signature");
+    await page.getByLabel("Nueva contraseña", { exact: true }).fill("nueva123");
+    await page.getByLabel("Confirmar contraseña").fill("nueva123");
+    await page.getByRole("button", { name: "Establecer contraseña", exact: true }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toContainText(
+      "El enlace venció o ya fue utilizado",
+    );
+    await expect(page.getByRole("heading", { name: "Contraseña creada", exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("button", { name: "Establecer contraseña", exact: true }),
+    ).toBeEnabled();
+    expect((await context.cookies()).some((cookie) => cookie.name === "access_token")).toBe(false);
+  });
+}
+
+test("primer acceso no anuncia exito ante una respuesta inesperada", async ({ page }) => {
+  await page.route("**/api/auth/recovery/reset", (route) =>
+    route.fulfill({ json: { detail: "Respuesta incompleta" } }),
+  );
+  await page.goto("/auth/first-login?token=welcome.payload.signature");
+  await page.getByLabel("Nueva contraseña", { exact: true }).fill("nueva123");
+  await page.getByLabel("Confirmar contraseña").fill("nueva123");
+  await page.getByRole("button", { name: "Establecer contraseña", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "No se pudo confirmar el cambio",
+  );
+  await expect(page.getByRole("heading", { name: "Contraseña creada", exact: true })).toHaveCount(
+    0,
+  );
+});
