@@ -136,6 +136,7 @@ export async function transportRequest(
     | "auth/login/tfa"
     | "auth/register"
     | "users/profile"
+    | `users/${number}/branches`
     | "auth/forgot-password"
     | "users/reset-password",
   options: { body?: unknown; token?: string } = {},

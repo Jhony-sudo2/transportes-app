@@ -21,13 +21,13 @@ import {
 } from "@/lib/validators/fleet-resources";
 import type { FleetRecordsActions } from "./FleetRecordsList";
 
-type Props = {
+export type DriverDialogProps = {
   driver: DriverListRecord;
   branchId: number;
   actions: FleetRecordsActions<DriverListRecord>;
 };
 
-function useDriverDialog(refresh: () => void) {
+export function useDriverDialog(refresh: () => void) {
   const { busy, setBusy } = useBranchWorkspace();
   const active = useRef(false);
   const [open, setOpen] = useState(false);
@@ -62,7 +62,7 @@ function useDriverDialog(refresh: () => void) {
   return { busy, open, working, error, changeOpen, run };
 }
 
-export function DriverSalaryDialog({ driver, branchId, actions }: Props) {
+export function DriverSalaryDialog({ driver, branchId, actions }: DriverDialogProps) {
   const dialog = useDriverDialog(actions.refresh);
   const [value, setValue] = useState("");
   const [validation, setValidation] = useState("");
@@ -174,7 +174,7 @@ export function DriverSalaryDialog({ driver, branchId, actions }: Props) {
   );
 }
 
-export function DeleteDriverRequestDialog({ driver, branchId, actions }: Props) {
+export function DeleteDriverRequestDialog({ driver, branchId, actions }: DriverDialogProps) {
   const dialog = useDriverDialog(actions.refresh);
   return (
     <Dialog open={dialog.open} onOpenChange={dialog.changeOpen}>

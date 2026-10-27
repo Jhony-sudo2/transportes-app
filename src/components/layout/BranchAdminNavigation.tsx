@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, BusFront, UserRoundPlus, Route } from "lucide-react";
+import { Building2, BusFront, UserRoundPlus, Route, ContactRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ManagementNavigation } from "./ManagementNavigation";
 import { useBranchWorkspace } from "./BranchWorkspaceProvider";
@@ -12,8 +12,9 @@ import {
 } from "@/lib/validators/branch-context";
 
 const items = [
-  { label: "Buses", icon: BusFront, href: "/sucursal/buses" },
-  { label: "Choferes", icon: UserRoundPlus, href: "/sucursal/choferes" },
+  { label: "Buses", icon: BusFront, href: "/branch-admin/buses" },
+  { label: "Choferes", icon: UserRoundPlus, href: "/branch-admin/drivers" },
+  { label: "Crear cajero", icon: ContactRound, href: "/branch-admin/cashiers/new" },
   { label: "Viajes", icon: Route, href: null },
 ];
 async function responseData(response: Response): Promise<unknown> {
@@ -101,7 +102,7 @@ export function BranchAdminNavigation({ name }: { name: string }) {
             : "Selecciona una sucursal para continuar."
           : "Viajes: próximamente",
       }))}
-      note="Consulta y registra los buses y choferes de la sucursal seleccionada. Viajes próximamente."
+      note="Gestiona buses, choferes y cajeros de la sucursal seleccionada. Viajes próximamente."
     >
       <div className="mb-4 rounded-xl border border-[var(--tg-line)] bg-[var(--color-surface)] p-4">
         <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">

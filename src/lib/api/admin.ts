@@ -15,7 +15,7 @@ export async function requireAdminAccess() {
   return { user, token };
 }
 export async function adminRequest(
-  path: "users" | "roles",
+  path: "users" | "roles" | "users/cashiers",
   token: string,
   body?: unknown,
 ): Promise<unknown> {

@@ -30,9 +30,21 @@ export async function getOwnDriver(access: Awaited<ReturnType<typeof requireAcco
       403,
       "Esta operación corresponde al perfil de chofer.",
     );
+  let raw: unknown;
+  try {
+    raw = await fleetRequest("drivers/me", access.token);
+  } catch (error) {
+    if (error instanceof ApplicationError && error.status === 401)
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "No se pudo validar tu perfil de chofer en Fleet. Inténtalo nuevamente.",
+      );
+    throw error;
+  }
   const driver = validatedFleetResult(
     AccountDriverSchema,
-    await fleetRequest("drivers/me", access.token),
+    raw,
     "No se pudieron verificar los datos de tu perfil en Fleet.",
   );
   if (driver.userId !== access.user.id)

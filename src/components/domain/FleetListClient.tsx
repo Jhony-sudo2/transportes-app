@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FleetRecordsList, type FleetRecordsActions } from "./FleetRecordsList";
 import { DriverSalaryDialog, DeleteDriverRequestDialog } from "./DriverManagementDialogs";
+import { DriverLicenseDialog } from "./DriverLicenseDialog";
 import { canDeleteDriverRequest } from "@/lib/driver-management";
 import type { Column } from "./ReportTable";
 import { busAvailability, driverAvailability } from "@/lib/fleet-availability";
@@ -143,7 +144,7 @@ function DriverList({
           <Button asChild size="sm" variant="outline">
             <Link
               aria-label={`Ver estado de ${driver.name} ${driver.lastName}`}
-              href={`/sucursal/choferes/nuevo?driverId=${driver.id}&operationId=${driver.pendingOperationId}&branchId=${branch.id}`}
+              href={`/branch-admin/drivers/new?driverId=${driver.id}&operationId=${driver.pendingOperationId}&branchId=${branch.id}`}
             >
               Ver estado
             </Link>
@@ -203,6 +204,11 @@ function DriverList({
             <p className="mt-1 text-xs text-[var(--tg-muted)]">
               Vence: {displayDate(driver.expirationDate)}
             </p>
+            {driverAvailability(driver).active !== null && (
+              <div className="mt-3">
+                <DriverLicenseDialog driver={driver} branchId={branch.id} actions={actions} />
+              </div>
+            )}
           </div>
         ),
       },

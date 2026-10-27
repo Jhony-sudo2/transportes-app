@@ -5,6 +5,8 @@ import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { getTransportSession } from "@/lib/auth/session";
 import { AdminNavigation } from "./AdminNavigation";
 import { BranchAdminNavigation } from "./BranchAdminNavigation";
+import { CustomerNavigation } from "./CustomerNavigation";
+import { CashierNavigation } from "./CashierNavigation";
 export async function NavBar(): Promise<React.ReactElement> {
   let user = null;
   try {
@@ -16,6 +18,10 @@ export async function NavBar(): Promise<React.ReactElement> {
     return <AdminNavigation name={user.name + " " + user.lastName} />;
   if (user?.role.name === "SUCURSAL_ADMIN" && !user.resetPassword)
     return <BranchAdminNavigation name={user.name + " " + user.lastName} />;
+  if (user?.role.name === "CUSTOMER" && !user.resetPassword)
+    return <CustomerNavigation name={user.name + " " + user.lastName} />;
+  if (user?.role.name === "CAJERO" && !user.resetPassword)
+    return <CashierNavigation name={user.name + " " + user.lastName} />;
   if (user && !user.resetPassword) {
     const roleLabels = {
       ADMIN: "Administrador",

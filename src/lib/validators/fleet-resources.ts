@@ -107,6 +107,8 @@ export const DriverListRecordSchema = CreatedDriverSchema.innerType().extend({
   number: z.string().nullish(),
   expirationDate: z.string().nullish(),
   licenseTypeName: z.string().nullish(),
+  licenseId: ManagedBranchIdSchema.nullish(),
+  licenseTypeId: ManagedBranchIdSchema.nullish(),
   active: z.boolean().optional(),
 });
 export const FleetAvailabilityRequestSchema = z
@@ -121,6 +123,24 @@ export const DriverSalaryRequestSchema = z
     baseSalary: CreateDriverSchema.shape.baseSalary,
   })
   .strict();
+export const DriverLicenseFormSchema = CreateDriverSchema.shape.license.strict();
+export const DriverLicenseRequestSchema = z
+  .object({
+    branchId: ManagedBranchIdSchema,
+    ...DriverLicenseFormSchema.shape,
+  })
+  .strict();
+export const LicenseRecordSchema = z.object({
+  id: ManagedBranchIdSchema,
+  number: required.max(255),
+  expirationDate: localDate,
+  tipo: required,
+});
+export const DriverLicenseContextSchema = z.object({
+  branchId: ManagedBranchIdSchema,
+  license: DriverLicenseFormSchema,
+  types: LicenseTypeListSchema,
+});
 export const BusListSchema = z.array(BusListRecordSchema);
 export const DriverListSchema = z.array(DriverListRecordSchema);
 export type BusListRecord = z.infer<typeof BusListRecordSchema>;

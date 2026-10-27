@@ -32,6 +32,12 @@ const records = new Map(
   ]),
 );
 const driverUser = records.get("account-DRIVER");
+const photoBytes = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4c8AAAAASUVORK5CYII=",
+  "base64",
+);
+const initialPhotoUrl = "https://profile-photos.test/current.png";
+const driverPhotoUploads = [];
 const driver = {
   id: 31,
   userId: driverUser.id,
@@ -41,12 +47,13 @@ const driver = {
   phone: driverUser.phone,
   dpi: driverUser.dpi,
   nit: driverUser.nit,
-  photo: "stored-photo",
+  photo: initialPhotoUrl,
   status: "ACTIVE",
   pendingOperationId: null,
   updateFailureReason: null,
 };
 const operations = new Map();
+let rejectDriverProfile = false;
 let profileWrites = 0,
   driverWrites = 0,
   passwordWrites = 0;
@@ -70,6 +77,10 @@ const api = http.createServer(async (request, response) => {
     return;
   }
   if (request.url === "/api/v1/drivers/me") {
+    if (rejectDriverProfile) {
+      send({}, 401);
+      return;
+    }
     if (user.id !== driver.userId) {
       send({}, 404);
       return;
@@ -116,9 +127,16 @@ const api = http.createServer(async (request, response) => {
   }
   if (request.url === "/api/v1/drivers/31" && request.method === "PUT") {
     assert.equal(user.id, driver.userId);
-    let raw = "";
-    for await (const chunk of request) raw += chunk;
-    const data = JSON.parse(raw);
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const form = await new Request("http://localhost/drivers/31", {
+      method: "PUT",
+      headers: request.headers,
+      body: Buffer.concat(chunks),
+    }).formData();
+    const requestPart = form.get("request");
+    assert.equal(requestPart.type, "application/json");
+    const data = JSON.parse(await requestPart.text());
     assert.deepEqual(Object.keys(data).sort(), [
       "adress",
       "dpi",
@@ -129,7 +147,14 @@ const api = http.createServer(async (request, response) => {
       "phone",
       "photo",
     ]);
-    assert.equal(data.photo, "stored-photo");
+    assert.equal(data.photo, driver.photo);
+    const photo = form.get("photo");
+    driverPhotoUploads.push(photo !== null);
+    if (photo !== null) {
+      assert.equal(photo.type, "image/png");
+      assert.deepEqual(Buffer.from(await photo.arrayBuffer()), photoBytes);
+      data.photo = "https://profile-photos.test/updated-" + (driverWrites + 1) + ".png";
+    }
     driverWrites++;
     const id = "550e8400-e29b-41d4-a716-44665544000" + driverWrites;
     driver.pendingOperationId = id;
@@ -227,6 +252,10 @@ try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
     await context.addCookies([{ name: "access_token", value: "account-" + role, url: base }]);
     const page = await context.newPage();
+    if (role === "DRIVER")
+      await page.route("https://profile-photos.test/**", (route) =>
+        route.fulfill({ contentType: "image/png", body: photoBytes }),
+      );
     const user = records.get("account-" + role);
     await page.goto(base + "/");
     await expect(
@@ -235,7 +264,20 @@ try {
     await expect(
       page.getByRole("banner").getByRole("link", { name: "Cambiar contraseña", exact: true }),
     ).toBeVisible();
+    if (role === "DRIVER") rejectDriverProfile = true;
     await page.getByRole("banner").getByRole("link", { name: "Mi perfil", exact: true }).click();
+    if (role === "DRIVER") {
+      await expect(
+        page.getByRole("heading", { name: "No se pudo cargar tu cuenta", exact: true }),
+      ).toBeVisible();
+      await expect(page).toHaveURL(base + "/mi-cuenta");
+      await expect(
+        page.getByRole("alert").filter({ hasText: "perfil de chofer en Fleet" }),
+      ).toBeVisible();
+      assert.ok((await context.cookies()).some((cookie) => cookie.name === "access_token"));
+      rejectDriverProfile = false;
+      await page.getByRole("link", { name: "Reintentar", exact: true }).click();
+    }
     await expect(page.getByRole("heading", { name: "Mi perfil.", exact: true })).toBeVisible();
     await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue("Cuenta");
     await expect(page.getByLabel("Dirección", { exact: true })).toHaveValue("Direccion original");
@@ -249,6 +291,42 @@ try {
       400,
     );
     if (role === "DRIVER") {
+      const currentPhoto = page.getByRole("img", {
+        name: "Foto de perfil del chofer",
+        exact: true,
+      });
+      const photoInput = page.getByLabel("Nueva foto de perfil (opcional)", { exact: true });
+      await expect(currentPhoto).toHaveAttribute("src", initialPhotoUrl);
+      await expect.poll(() => currentPhoto.evaluate((image) => image.naturalWidth)).toBe(1);
+      await photoInput.setInputFiles({
+        name: "invalid.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("invalid"),
+      });
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Usa una fotografía JPG o PNG." }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Enviar cambios", exact: true }).click();
+      assert.equal(driverWrites, 0);
+      await photoInput.setInputFiles({
+        name: "preview.png",
+        mimeType: "image/png",
+        buffer: photoBytes,
+      });
+      const preview = page.getByRole("img", {
+        name: "Vista previa de la nueva foto de perfil",
+        exact: true,
+      });
+      await expect(preview).toHaveAttribute("src", /^blob:/);
+      await expect.poll(() => preview.evaluate((image) => image.naturalWidth)).toBe(1);
+      await page.getByRole("button", { name: "Descartar nueva foto", exact: true }).click();
+      await expect(currentPhoto).toHaveAttribute("src", initialPhotoUrl);
+      assert.equal(await photoInput.evaluate((input) => input.files.length), 0);
+      await photoInput.setInputFiles({
+        name: "rejected.png",
+        mimeType: "image/png",
+        buffer: photoBytes,
+      });
       await expect(page.getByLabel("DPI", { exact: true })).not.toHaveAttribute("readonly");
       await page.getByLabel("Nombre", { exact: true }).fill("Propuesta rechazada");
       await page.getByLabel("NIT", { exact: true }).fill("DUPLICADO");
@@ -271,6 +349,13 @@ try {
       ).toBeVisible({ timeout: 15000 });
       await expect(page.getByRole("button", { name: "Enviar cambios", exact: true })).toBeEnabled();
       await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue("Cuenta");
+      await expect(currentPhoto).toHaveAttribute("src", initialPhotoUrl);
+      assert.equal(driver.photo, initialPhotoUrl);
+      await photoInput.setInputFiles({
+        name: "accepted.png",
+        mimeType: "image/png",
+        buffer: photoBytes,
+      });
       await page.getByLabel("Nombre", { exact: true }).fill("Conductor actualizado");
       await page.getByLabel("NIT", { exact: true }).fill("NIT-NUEVO");
       await page.getByLabel("Teléfono", { exact: true }).fill("55550000");
@@ -302,7 +387,37 @@ try {
       ).toBeVisible({ timeout: 15000 });
       await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue("Conductor actualizado");
       assert.equal(driverWrites, 2);
-      assert.equal(user.phone, "55550000");
+      await expect(currentPhoto).toHaveAttribute(
+        "src",
+        "https://profile-photos.test/updated-2.png",
+      );
+      await expect.poll(() => currentPhoto.evaluate((image) => image.naturalWidth)).toBe(1);
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        true,
+      );
+      await page.screenshot({
+        path: "test-results/driver-profile-photo-mobile.png",
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 1440, height: 1100 });
+      await page.getByLabel("Teléfono", { exact: true }).fill("55551111");
+      await page.getByRole("button", { name: "Enviar cambios", exact: true }).click();
+      await expect(check).toBeEnabled({ timeout: 15000 });
+      await check.click();
+      await expect(
+        page
+          .getByRole("status")
+          .filter({ hasText: "Tus datos fueron actualizados y confirmados." }),
+      ).toBeVisible({ timeout: 15000 });
+      await expect(currentPhoto).toHaveAttribute(
+        "src",
+        "https://profile-photos.test/updated-2.png",
+      );
+      assert.deepEqual(driverPhotoUploads, [true, true, false]);
+      assert.equal(driverWrites, 3);
+      assert.equal(user.phone, "55551111");
       assert.equal(user.adress, "Direccion actualizada");
     } else {
       await expect(page.getByLabel("DPI", { exact: true })).toHaveAttribute("readonly", "");
@@ -390,10 +505,10 @@ try {
     await context.close();
   }
   assert.equal(profileWrites, 4);
-  assert.equal(driverWrites, 2);
+  assert.equal(driverWrites, 3);
   assert.equal(passwordWrites, 5);
   process.stdout.write(
-    "PASS: barras de los cinco roles, perfil propio, datos precargados, cambios por DriverController, saga pendiente/rechazada/completada, contraseña actual, cierre de sesión y vista móvil.\n",
+    "PASS: barras de los cinco roles, perfil propio, datos precargados, cambios por DriverController, saga pendiente/rechazada/completada, fotografía visible y actualización multipart opcional, contraseña actual, cierre de sesión y vista móvil.\n",
   );
 } catch (error) {
   process.stderr.write(String(error) + "\n");

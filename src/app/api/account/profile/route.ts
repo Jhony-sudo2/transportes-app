@@ -17,6 +17,7 @@ import {
 } from "@/lib/validators/account";
 import { TransportUserSchema } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
+import { driverPhotoError } from "@/lib/validators/fleet-resources";
 
 export async function GET() {
   try {
@@ -30,13 +31,91 @@ export async function PUT(request: NextRequest) {
     if (request.headers.get("origin") !== request.nextUrl.origin)
       throw new ApplicationError("auth.forbidden", 403, "Origen no permitido.");
     const access = await requireAccountAccess();
-    let raw: unknown;
-    try {
-      raw = await request.json();
-    } catch {
-      return NextResponse.json({ detail: "Solicitud JSON inválida." }, { status: 400 });
-    }
     const driverRole = access.user.role.name === "DRIVER";
+    const multipart = request.headers.get("content-type")?.startsWith("multipart/form-data");
+    let raw: unknown;
+    let photo: File | null = null;
+    if (multipart) {
+      if (!driverRole)
+        throw new ApplicationError(
+          "auth.forbidden",
+          403,
+          "Solo el perfil del chofer admite fotografías.",
+        );
+      const length = Number(request.headers.get("content-length"));
+      if (Number.isFinite(length) && length > 2 * 1024 * 1024)
+        throw new ApplicationError(
+          "validation.failed",
+          413,
+          "La fotografía debe pesar como máximo 1 MB.",
+        );
+      let form: FormData;
+      try {
+        form = await request.formData();
+      } catch {
+        throw new ApplicationError(
+          "validation.failed",
+          400,
+          "Envía los datos de tu perfil en un formulario válido.",
+        );
+      }
+      if (
+        Array.from(form.keys()).some((key) => !["request", "photo"].includes(key)) ||
+        form.getAll("request").length !== 1 ||
+        form.getAll("photo").length > 1
+      )
+        throw new ApplicationError(
+          "validation.failed",
+          400,
+          "El formulario del perfil contiene campos inválidos.",
+        );
+      const part = form.get("request");
+      try {
+        if (part === null || (typeof part === "string" ? part.length : part.size) > 16384)
+          throw new Error();
+        raw = JSON.parse(typeof part === "string" ? part : await part.text());
+      } catch {
+        throw new ApplicationError(
+          "validation.failed",
+          400,
+          "Los datos del perfil no son válidos.",
+        );
+      }
+      const file = form.get("photo");
+      if (file !== null) {
+        if (typeof file === "string")
+          throw new ApplicationError(
+            "validation.failed",
+            400,
+            "Selecciona un archivo para actualizar tu fotografía.",
+          );
+        const issue = driverPhotoError(file);
+        if (issue)
+          throw new ApplicationError(
+            "validation.failed",
+            file.size > 1024 * 1024 ? 413 : 400,
+            issue,
+          );
+        const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+        const png =
+          bytes.length >= 8 &&
+          [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte);
+        const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+        if (!(file.type === "image/png" && png) && !(file.type === "image/jpeg" && jpeg))
+          throw new ApplicationError(
+            "validation.failed",
+            400,
+            "El archivo no es una fotografía JPG o PNG válida.",
+          );
+        photo = file;
+      }
+    } else {
+      try {
+        raw = await request.json();
+      } catch {
+        return NextResponse.json({ detail: "Solicitud JSON inválida." }, { status: 400 });
+      }
+    }
     const parsed = (
       driverRole ? DriverProfileRequestSchema : AccountProfileRequestSchema
     ).safeParse(raw);
@@ -54,14 +133,17 @@ export async function PUT(request: NextRequest) {
           409,
           "Espera a que termine la operación pendiente de tu perfil antes de guardar otro cambio.",
         );
+      const upstream = new FormData();
+      upstream.append(
+        "request",
+        new Blob([JSON.stringify({ ...data, photo: driver.photo })], { type: "application/json" }),
+        "request.json",
+      );
+      if (photo)
+        upstream.append("photo", photo, photo.type === "image/png" ? "photo.png" : "photo.jpg");
       const updated = validatedFleetResult(
         AccountDriverSchema,
-        await fleetRequest(
-          `drivers/${driver.id}`,
-          access.token,
-          { ...data, photo: driver.photo },
-          "PUT",
-        ),
+        await fleetRequest(`drivers/${driver.id}`, access.token, upstream, "PUT"),
         "No se pudo confirmar la solicitud. Consulta tu perfil antes de volver a guardarlo.",
       );
       if (

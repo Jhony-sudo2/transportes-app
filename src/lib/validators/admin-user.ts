@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TransportRegisterRequestSchema, TransportUserSchema } from "./auth";
+import { ManagedBranchIdSchema } from "./branch-context";
 export const ADMIN_ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrador del sistema",
   CUSTOMER: "Cliente",
@@ -31,6 +32,12 @@ export const CreatedAdminUserSchema = TransportUserSchema.pick({
   email: true,
   role: true,
 });
+export const CreateBranchCashierSchema = CreateAdminUserSchema.pick({
+  person: true,
+  email: true,
+})
+  .extend({ branchId: ManagedBranchIdSchema })
+  .strict();
 export type CreateAdminUser = z.infer<typeof CreateAdminUserSchema>;
 export type AdminRole = z.infer<typeof AdminRoleSchema>;
 export type CreatedAdminUser = z.infer<typeof CreatedAdminUserSchema>;

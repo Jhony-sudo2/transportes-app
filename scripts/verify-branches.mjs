@@ -50,6 +50,7 @@ let busAvailabilityWrites = 0,
   driverAvailabilityWrites = 0,
   busAvailabilityAttempts = 0;
 let failNextBusAvailability = false;
+let licenseWrites = 0;
 let salaryWrites = 0,
   deleteAttempts = 0,
   deleteWrites = 0,
@@ -122,6 +123,16 @@ const api = http.createServer(async (request, response) => {
     return;
   }
 
+  if (request.url === "/api/v1/roles") {
+    send([
+      { id: 1, name: "ADMIN" },
+      { id: 2, name: "CUSTOMER" },
+      { id: 3, name: "SUCURSAL_ADMIN" },
+      { id: 4, name: "DRIVER" },
+      { id: 5, name: "CASHIER" },
+    ]);
+    return;
+  }
   const salaryPath = request.url.match(/^\/api\/v1\/drivers\/(\d+)\/salary$/);
   if (salaryPath && request.method === "PATCH") {
     let raw = "";
@@ -195,6 +206,33 @@ const api = http.createServer(async (request, response) => {
     send(bus ?? {}, bus ? 200 : 404);
     return;
   }
+  if (request.url === "/api/v1/licenses/81") {
+    const driver = storedDrivers.find((record) => record.licenseId === 81);
+    assert.ok(driver);
+    if (request.method === "PUT") {
+      let raw = "";
+      for await (const chunk of request) raw += chunk;
+      const data = JSON.parse(raw);
+      assert.deepEqual(Object.keys(data).sort(), ["expirationDate", "licenseType", "number"]);
+      if (data.number === "LIC-DUPLICADA") {
+        send({ detail: "Número de licencia ya registrado." }, 409);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      driver.number = data.number;
+      driver.expirationDate = data.expirationDate;
+      driver.licenseTypeId = data.licenseType;
+      driver.licenseTypeName = data.licenseType === 1 ? "A" : "B";
+      licenseWrites++;
+    }
+    send({
+      id: 81,
+      number: driver.number,
+      expirationDate: driver.expirationDate,
+      tipo: driver.licenseTypeName,
+    });
+    return;
+  }
   if (request.url === "/api/v1/licenses/types") {
     send([
       { id: 1, name: "A" },
@@ -248,6 +286,8 @@ const api = http.createServer(async (request, response) => {
       email: receivedDriver.email,
       phone: receivedDriver.phone,
       baseSalary: receivedDriver.baseSalary,
+      licenseId: 81,
+      licenseTypeId: receivedDriver.license.licenseType,
       number: receivedDriver.license.number,
       expirationDate: receivedDriver.license.expirationDate,
       licenseTypeName: "A",
@@ -412,8 +452,30 @@ try {
       ),
     }),
   );
+  const anonymous = await browser.newContext();
+  const anonymousPage = await anonymous.newPage();
+  for (const path of [
+    "/system-admin/users",
+    "/system-admin/branches",
+    "/branch-admin/buses",
+    "/branch-admin/drivers",
+  ]) {
+    await anonymousPage.goto(base + path);
+    await expect(anonymousPage).toHaveURL(base + "/login");
+  }
+  await anonymous.close();
   await page.goto(base + "/admin/sucursales");
+  await expect(page).toHaveURL(base + "/system-admin/branches");
   await expect(page.getByRole("heading", { name: "Nuestra red, en el mapa." })).toBeVisible();
+  await expect(page.locator('.leaflet-marker-icon[title="Sede Central"]')).toHaveCount(1);
+  await page.getByRole("banner").getByRole("link", { name: "Usuarios", exact: true }).click();
+  await expect(page).toHaveURL(base + "/system-admin/users");
+  await expect(
+    page.getByRole("heading", { name: "Un nuevo integrante del equipo.", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Rol del usuario", { exact: true })).toBeEnabled();
+  await page.getByRole("banner").getByRole("link", { name: "Sucursales", exact: true }).click();
+  await expect(page).toHaveURL(base + "/system-admin/branches");
   await expect(page.locator('.leaflet-marker-icon[title="Sede Central"]')).toHaveCount(1);
   await page.getByRole("button", { name: "Nueva sucursal" }).click();
   await page.getByLabel("Nombre de la sucursal").fill("Sucursal de prueba");
@@ -496,6 +558,13 @@ try {
   await page.screenshot({ path: "test-results/branches-create-mobile.png", fullPage: true });
   const customer = await browser.newContext();
   await customer.addCookies([{ name: "access_token", value: "customer-map-test", url: base }]);
+  for (const path of [
+    "/system-admin/users",
+    "/system-admin/branches",
+    "/branch-admin/buses",
+    "/branch-admin/drivers",
+  ])
+    assert.equal((await customer.request.get(base + path)).status(), 404);
   const blocked = await customer.request.post(base + "/api/admin/branches", {
     headers: { Origin: base },
     data: { name: "No autorizado" },
@@ -934,6 +1003,102 @@ try {
   await expect(driverTable.getByRole("row").filter({ hasText: "Ana Lopez" })).toContainText(
     "6,210.75",
   );
+  await managerPage.setViewportSize({ width: 390, height: 844 });
+  await managerPage
+    .getByRole("button", { name: "Actualizar licencia de Ana Lopez", exact: true })
+    .click();
+  const licenseDialog = managerPage.getByRole("dialog", {
+    name: "Actualizar licencia",
+    exact: true,
+  });
+  await expect(licenseDialog.getByLabel("Número de licencia", { exact: true })).toHaveValue(
+    "LIC-123",
+  );
+  await expect(licenseDialog.getByLabel("Tipo de licencia", { exact: true })).toHaveValue("1");
+  await expect(licenseDialog.getByLabel("Vencimiento de la licencia", { exact: true })).toHaveValue(
+    "2030-12-31",
+  );
+  await licenseDialog.getByLabel("Número de licencia", { exact: true }).fill("BORRADOR");
+  assert.equal(
+    await managerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    true,
+  );
+  await managerPage.screenshot({ path: "test-results/driver-license-mobile.png", fullPage: true });
+  await licenseDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  assert.equal(licenseWrites, 0);
+  await managerPage.setViewportSize({ width: 1440, height: 1100 });
+  await managerPage
+    .getByRole("button", { name: "Actualizar licencia de Ana Lopez", exact: true })
+    .click();
+  await expect(licenseDialog.getByLabel("Número de licencia", { exact: true })).toHaveValue(
+    "LIC-123",
+  );
+  await licenseDialog.getByLabel("Vencimiento de la licencia", { exact: true }).fill("2029-12-31");
+  await licenseDialog.getByRole("button", { name: "Guardar licencia", exact: true }).click();
+  await expect(licenseDialog.getByRole("alert")).toContainText("no puede ser anterior");
+  assert.equal(licenseWrites, 0);
+  await licenseDialog.getByLabel("Vencimiento de la licencia", { exact: true }).fill("2032-12-31");
+  await licenseDialog.getByLabel("Número de licencia", { exact: true }).fill("LIC-DUPLICADA");
+  await licenseDialog.getByRole("button", { name: "Guardar licencia", exact: true }).click();
+  await expect(licenseDialog.getByRole("alert")).toContainText("ya registrado");
+  assert.equal(licenseWrites, 0);
+  await licenseDialog.getByLabel("Número de licencia", { exact: true }).fill("LIC-RENOVADA");
+  await licenseDialog.getByLabel("Tipo de licencia", { exact: true }).selectOption("2");
+  await licenseDialog
+    .getByRole("button", { name: "Guardar licencia", exact: true })
+    .evaluate((button) => {
+      button.click();
+      button.click();
+    });
+  await expect(managerPage.locator("#managed-branch")).toBeDisabled();
+  await expect(licenseDialog).toHaveCount(0);
+  await expect(
+    managerPage.getByRole("status").filter({ hasText: "Licencia de Ana Lopez actualizada." }),
+  ).toBeVisible();
+  assert.equal(licenseWrites, 1);
+  await expect(driverTable.getByRole("row").filter({ hasText: "Ana Lopez" })).toContainText(
+    "LIC-RENOVADA · B",
+  );
+  await managerPage.reload();
+  await expect(driverTable.getByRole("row").filter({ hasText: "Ana Lopez" })).toContainText(
+    "LIC-RENOVADA · B",
+  );
+  await managerPage
+    .getByRole("button", { name: "Actualizar licencia de Ana Lopez", exact: true })
+    .click();
+  await expect(licenseDialog.getByLabel("Tipo de licencia", { exact: true })).toHaveValue("2");
+  await expect(licenseDialog.getByLabel("Vencimiento de la licencia", { exact: true })).toHaveValue(
+    "2032-12-31",
+  );
+  await licenseDialog.getByRole("button", { name: "Cancelar", exact: true }).click();
+  assert.equal(
+    (
+      await customer.request.put(base + "/api/branch-admin/drivers/31/license", {
+        headers: { Origin: base },
+        data: { branchId: 2, number: "OTRA", expirationDate: "2033-01-01", licenseType: 1 },
+      })
+    ).status(),
+    403,
+  );
+  assert.equal(
+    (
+      await manager.request.put(base + "/api/branch-admin/drivers/31/license", {
+        headers: { Origin: base },
+        data: { branchId: 1, number: "OTRA", expirationDate: "2033-01-01", licenseType: 1 },
+      })
+    ).status(),
+    409,
+  );
+  assert.equal(
+    (await manager.request.get(base + "/api/branch-admin/drivers/99/license?branchId=2")).status(),
+    403,
+  );
+  assert.equal(
+    (await manager.request.get(base + "/api/branch-admin/drivers/33/license?branchId=2")).status(),
+    409,
+  );
+  assert.equal(licenseWrites, 1);
+
   assert.equal(
     (
       await customer.request.patch(base + "/api/branch-admin/drivers/31/salary", {
@@ -1144,7 +1309,7 @@ try {
   await customer.close();
   await context.close();
   process.stdout.write(
-    "PASS: clic, arrastre, decimales, guardado unico, edicion, cancelacion, recarga de marcadores, navegacion por rol, selector de sucursales, alta de bus, multipart de chofer, confirmacion pendiente/completada, listados por sucursal, busqueda, filtros, paginacion, activacion/desactivacion sin envios duplicados, salario base, solicitudes rechazadas y eliminacion confirmada, recuperacion de errores, cierre de sesion, vista movil y permisos.\n",
+    "PASS: clic, arrastre, decimales, guardado unico, edicion, cancelacion, recarga de marcadores, navegacion por rol, selector de sucursales, alta de bus, multipart de chofer, confirmacion pendiente/completada, listados por sucursal, busqueda, filtros, paginacion, activacion/desactivacion sin envios duplicados, salario base, renovación de licencias, solicitudes rechazadas y eliminacion confirmada, recuperacion de errores, cierre de sesion, vista movil y permisos.\n",
   );
 } catch (error) {
   process.stderr.write(String(error) + "\n");

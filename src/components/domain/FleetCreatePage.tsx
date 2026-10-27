@@ -15,10 +15,10 @@ type Props = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 export async function FleetCreatePage({ kind, view = "create", searchParams }: Props) {
-  const listPath = kind === "bus" ? "/sucursal/buses" : "/sucursal/choferes";
+  const listPath = kind === "bus" ? "/branch-admin/buses" : "/branch-admin/drivers";
   const isList = view !== "create";
   const currentPath =
-    view === "requests" ? listPath + "/solicitudes" : isList ? listPath : listPath + "/nuevo";
+    view === "requests" ? listPath + "/requests" : isList ? listPath : listPath + "/new";
   const title =
     view === "requests"
       ? "Solicitudes de choferes."
@@ -59,7 +59,7 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
           <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
           {branch && (
             <Button asChild variant={isList ? "default" : "outline"}>
-              <Link href={isList ? listPath + "/nuevo" : listPath}>
+              <Link href={isList ? listPath + "/new" : listPath}>
                 {isList
                   ? kind === "bus"
                     ? "Crear bus"
@@ -85,7 +85,7 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
             </Button>
             <Button asChild variant={view === "requests" ? "default" : "outline"}>
               <Link
-                href={listPath + "/solicitudes"}
+                href={listPath + "/requests"}
                 aria-current={view === "requests" ? "page" : undefined}
               >
                 Solicitudes de registro

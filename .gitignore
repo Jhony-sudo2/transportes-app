@@ -98,3 +98,5 @@ session.json
 /.next-map-check/
 /.next-build/
 /.next-account-check/
+/.next-customer-check/
+/.next-refunds-check/

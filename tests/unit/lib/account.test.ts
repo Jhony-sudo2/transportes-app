@@ -72,6 +72,23 @@ function request(body: unknown, path = "profile", origin = "http://localhost:300
     body: JSON.stringify(body),
   });
 }
+function multipartRequest(photo?: Blob | string, data: unknown = fields) {
+  const body = new FormData();
+  body.append(
+    "request",
+    new Blob([JSON.stringify(data)], { type: "application/json" }),
+    "request.json",
+  );
+  if (photo !== undefined) {
+    if (typeof photo === "string") body.append("photo", photo);
+    else body.append("photo", photo, "profile.png");
+  }
+  return new NextRequest("http://localhost:3000/api/account/profile", {
+    method: "PUT",
+    headers: { Origin: "http://localhost:3000" },
+    body,
+  });
+}
 const operationRequest = () =>
   new NextRequest("http://localhost:3000/api/account/profile/operations/" + opId);
 const operationContext = (operationId = opId) => ({ params: Promise.resolve({ operationId }) });
@@ -101,6 +118,15 @@ describe("Cuenta propia por rol", () => {
       else expect(mocks.fetch).not.toHaveBeenCalled();
     },
   );
+
+  it("un rechazo de Fleet no invalida una sesión que Identity ya verificó", async () => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    mocks.fetch.mockResolvedValueOnce(Response.json({}, { status: 401 }));
+    const response = await profile();
+    expect(response.status).toBe(502);
+    expect((await response.json()).detail).toContain("perfil de chofer en Fleet");
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
 
   it.each(["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "CAJERO"])(
     "actualiza datos propios de %s y conserva su segundo factor",
@@ -134,10 +160,86 @@ describe("Cuenta propia por rol", () => {
     const [url, options] = mocks.fetch.mock.calls[1] ?? [];
     expect(url).toMatch(/\/api\/v1\/drivers\/31$/);
     expect(options.method).toBe("PUT");
-    expect(JSON.parse(options.body)).toEqual({ ...fields, photo: "stored-photo" });
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.headers["Content-Type"]).toBeUndefined();
+    const part = options.body.get("request");
+    if (!(part instanceof Blob)) throw new Error("Falta la parte JSON del perfil.");
+    expect(part.type).toBe("application/json");
+    expect(JSON.parse(await part.text())).toEqual({ ...fields, photo: "stored-photo" });
+    expect(options.body.has("photo")).toBe(false);
     expect(mocks.fetch.mock.calls.some(([url]) => String(url).includes("/api/v1/users/"))).toBe(
       false,
     );
+  });
+
+  it("envía la fotografía opcional validada junto con los datos de su propio chofer", async () => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    mocks.fetch
+      .mockResolvedValueOnce(Response.json(driver))
+      .mockResolvedValueOnce(
+        Response.json({ ...driver, pendingOperationId: opId }, { status: 202 }),
+      );
+    const image = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])], {
+      type: "image/png",
+    });
+    expect((await update(multipartRequest(image))).status).toBe(202);
+    const [url, options] = mocks.fetch.mock.calls[1] ?? [];
+    expect(url).toMatch(/drivers\/31$/);
+    expect(options.method).toBe("PUT");
+    expect(options.headers.Authorization).toBe("Bearer private-session");
+    expect(options.headers["Content-Type"]).toBeUndefined();
+    const photo = options.body.get("photo");
+    if (!(photo instanceof Blob)) throw new Error("Falta la foto.");
+    expect(photo.type).toBe("image/png");
+    expect(new Uint8Array(await photo.arrayBuffer())).toEqual(
+      new Uint8Array(await image.arrayBuffer()),
+    );
+    const part = options.body.get("request");
+    if (!(part instanceof Blob)) throw new Error("Faltan los datos.");
+    expect(JSON.parse(await part.text())).toEqual({ ...fields, photo: driver.photo });
+  });
+
+  it("acepta multipart sin foto y conserva la URL actual en los datos enviados", async () => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    mocks.fetch
+      .mockResolvedValueOnce(Response.json(driver))
+      .mockResolvedValueOnce(
+        Response.json({ ...driver, pendingOperationId: opId }, { status: 202 }),
+      );
+    expect((await update(multipartRequest())).status).toBe(202);
+    expect(mocks.fetch.mock.calls[1]?.[1].body.has("photo")).toBe(false);
+  });
+
+  it.each([
+    [new Blob([], { type: "image/png" }), 400],
+    [new Blob(["svg"], { type: "image/svg+xml" }), 400],
+    [new Blob(["no es una imagen"], { type: "image/png" }), 400],
+    [new Blob([new Uint8Array(1024 * 1024 + 1)], { type: "image/png" }), 413],
+    ["https://otro.example/photo.png", 400],
+  ])("rechaza una foto inválida antes de contactar a Fleet", async (photo, status) => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    expect((await update(multipartRequest(photo as Blob | string))).status).toBe(status);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("no permite un formulario de fotografía para los demás roles", async () => {
+    expect((await update(multipartRequest())).status).toBe(403);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rechaza referencias de foto o identificadores dentro de los datos del navegador", async () => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    expect(
+      (
+        await update(
+          multipartRequest(undefined, { ...fields, photo: "https://otro.example/photo" }),
+        )
+      ).status,
+    ).toBe(400);
+    expect((await update(multipartRequest(undefined, { ...fields, driverId: 99 }))).status).toBe(
+      400,
+    );
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("bloquea una nueva actualizacion mientras el chofer tiene una operacion pendiente", async () => {

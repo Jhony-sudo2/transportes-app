@@ -1,20 +1,7 @@
-import { NavBar } from "@/components/layout/NavBar";
-import { RoleShell } from "@/components/layout/RoleShell";
-import { requireRole } from "@/lib/auth/guards";
+import { TransportShell } from "@/components/layout/TransportShell";
+import { requireTransportPageAccess } from "@/lib/auth/page-access";
 
-interface SystemAdminLayoutProps {
-  children: React.ReactNode;
-}
-
-export default async function SystemAdminLayout({
-  children,
-}: SystemAdminLayoutProps): Promise<React.ReactElement> {
-  await requireRole("SYSTEM_ADMIN");
-
-  return (
-    <div>
-      <NavBar />
-      <RoleShell role="SYSTEM_ADMIN">{children}</RoleShell>
-    </div>
-  );
+export default async function SystemAdminLayout({ children }: { children: React.ReactNode }) {
+  await requireTransportPageAccess("ADMIN");
+  return <TransportShell>{children}</TransportShell>;
 }

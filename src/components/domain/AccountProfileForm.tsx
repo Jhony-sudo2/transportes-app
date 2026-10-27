@@ -5,9 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { FleetField } from "./FleetField";
+import { DriverProfilePhoto } from "./DriverProfilePhoto";
 import { useBranchWorkspace } from "@/components/layout/BranchWorkspaceProvider";
 import { readFleetResponse } from "@/lib/fleet-ui";
-import { DriverOperationIdSchema } from "@/lib/validators/fleet-resources";
+import { DriverOperationIdSchema, driverPhotoError } from "@/lib/validators/fleet-resources";
 import {
   AccountProfileSchema,
   AccountProfileRequestSchema,
@@ -56,6 +57,8 @@ export function AccountProfileForm({
   const { busy, setBusy } = useBranchWorkspace();
   const sending = useRef(false);
   const [profile, setProfile] = useState(initialProfile);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const photoError = photo ? driverPhotoError(photo) : null;
   const [operationId, setOperationId] = useState<string | null>(() => {
     const id = initialProfile.driver?.pendingOperationId ?? initialOperationId;
     return isDriver && DriverOperationIdSchema.safeParse(id).success ? (id ?? null) : null;
@@ -105,6 +108,7 @@ export function AccountProfileForm({
           const current = await refresh(controller.signal);
           if (controller.signal.aborted) return;
           setProfile(current);
+          setPhoto(null);
           if (result.status === "COMPLETED") {
             reset(values(current));
             setNotice("Tus datos fueron actualizados y confirmados.");
@@ -138,17 +142,26 @@ export function AccountProfileForm({
     !!profile.driver?.pendingOperationId ||
     !!(operationId && (!operation || operation.status === "PENDING"));
   async function submit(data: AccountProfileRequest) {
-    if (sending.current || busy || pending || checking) return;
+    if (sending.current || busy || pending || checking || photoError) return;
     sending.current = true;
     setBusy(true);
     setError("");
     setNotice("");
     try {
+      const multipart = new FormData();
+      if (isDriver) {
+        multipart.append(
+          "request",
+          new Blob([JSON.stringify(data)], { type: "application/json" }),
+          "request.json",
+        );
+        if (photo) multipart.append("photo", photo);
+      }
       const body = await readFleetResponse(
         await fetch("/api/account/profile", {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+          ...(isDriver ? {} : { headers: { "Content-Type": "application/json" } }),
+          body: isDriver ? multipart : JSON.stringify(data),
         }),
       );
       if (!body || typeof body !== "object" || !("status" in body))
@@ -240,6 +253,15 @@ export function AccountProfileForm({
         noValidate
         className="space-y-6"
       >
+        {isDriver && (
+          <DriverProfilePhoto
+            currentPhoto={profile.driver?.photo}
+            photo={photo}
+            onChange={setPhoto}
+            error={photoError}
+            disabled={disabled}
+          />
+        )}
         <div className="grid gap-5 sm:grid-cols-2">
           <FleetField
             id="account-name"
@@ -318,6 +340,7 @@ export function AccountProfileForm({
             disabled={disabled}
             onClick={() => {
               reset(values(profile));
+              setPhoto(null);
               setError("");
             }}
           >

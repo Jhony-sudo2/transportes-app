@@ -105,7 +105,7 @@ export function CreateDriverForm({
     if (operation)
       for (const [key, value] of Object.entries(operation))
         url.searchParams.set(key, String(value));
-    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
   }
   function newDriver() {
     setReference(null);

@@ -10,6 +10,7 @@ type FleetPath =
   | `buses/${number}/disponibilidad`
   | `drivers/${number}/disponibilidad?active=${boolean}`
   | "licenses/types"
+  | `licenses/${number}`
   | `branches/${number}/drivers`
   | `branches/${number}/buses`
   | `drivers/${number}/operations/${string}`

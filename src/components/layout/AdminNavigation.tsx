@@ -1,8 +1,8 @@
 import { UsersRound, Building2, ShieldCheck, ChartNoAxesCombined } from "lucide-react";
 import { ManagementNavigation } from "./ManagementNavigation";
 const options = [
-  { label: "Usuarios", icon: UsersRound, href: "/admin/usuarios" },
-  { label: "Sucursales", icon: Building2, href: "/admin/sucursales" },
+  { label: "Usuarios", icon: UsersRound, href: "/system-admin/users" },
+  { label: "Sucursales", icon: Building2, href: "/system-admin/branches" },
   { label: "Roles", icon: ShieldCheck, href: null },
   { label: "Reportes", icon: ChartNoAxesCombined, href: null },
 ];

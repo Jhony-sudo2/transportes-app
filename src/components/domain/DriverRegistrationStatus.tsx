@@ -101,7 +101,7 @@ export function DriverRegistrationStatus({
           </Button>
         )}
         <Button asChild variant="outline">
-          <Link href="/sucursal/choferes/solicitudes">Ver solicitudes de registro</Link>
+          <Link href="/branch-admin/drivers/requests">Ver solicitudes de registro</Link>
         </Button>
         <Button type="button" onClick={onNew}>
           Registrar otro chofer
