@@ -96,7 +96,7 @@ function RefundInvoiceContent({
 }) {
   const { invoice, branchName } = detail;
   const customer = actor === "customer";
-  const available = invoice.state === "CANCELLED";
+  const available = invoice.state === "REFUND" && invoice.totalAmount > 0;
   const { busy, setBusy } = useBranchWorkspace();
   const active = useRef(false);
   const [open, setOpen] = useState(false);
@@ -176,6 +176,10 @@ function RefundInvoiceContent({
           </span>
         </div>
         <dl className="mt-6 grid gap-5 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-[var(--tg-muted)]">Devuelto por cancelación propia</dt>
+            <dd className="mt-1 font-medium">{formatCurrency(invoice.refundedAmount ?? 0)}</dd>
+          </div>
           <div>
             <dt className="text-[var(--tg-muted)]">Sucursal</dt>
             <dd className="mt-1 font-medium">{branchName}</dd>

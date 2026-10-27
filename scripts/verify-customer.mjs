@@ -52,6 +52,7 @@ const invoices = Array.from({ length: 12 }, (_, index) => ({
   branchId: 2,
   userId: 7,
   totalAmount: 50,
+  refundedAmount: null,
   paymentDate: "2026-10-25T09:30:00",
   chanel: "WEB",
   sellerUserId: null,
@@ -60,6 +61,24 @@ const invoices = Array.from({ length: 12 }, (_, index) => ({
   state: index === 2 ? "CANCELLED" : "PAID",
 }));
 invoices.push({ ...invoices[0], id: 99, userId: 8 });
+const invoiceTickets = new Map(
+  invoices.map((invoice) => [
+    invoice.id,
+    invoice.typeInvoice === "RENTAL_PAYMENT"
+      ? []
+      : [101, 102].map((id, index) => ({
+          id: invoice.id === 10 ? id : invoice.id * 10 + index,
+          invoiceId: invoice.id,
+          amount: 25,
+          position: { row: 1, column: 2 + index },
+          paymentDate: invoice.paymentDate,
+          state: invoice.state === "PAID" ? "PAID" : "CANCELLED",
+        })),
+  ]),
+);
+let cancellationAttempts = 0,
+  cancellationWrites = 0,
+  uncertainCancellation = false;
 let rechargeAttempts = 0,
   rechargeWrites = 0,
   failWalletRead = true,
@@ -129,6 +148,58 @@ const api = http.createServer(async (request, response) => {
     send(invoices.filter((invoice) => invoice.userId === current.id));
     return;
   }
+  if (request.url.startsWith("/api/v1/cancellations/") && request.method === "POST") {
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    const input = JSON.parse(raw);
+    cancellationAttempts++;
+    const all = request.url.endsWith("/invoices");
+    assert.deepEqual(Object.keys(input), [all ? "invoiceId" : "tickets"]);
+    const invoice = all
+      ? invoices.find((item) => item.id === input.invoiceId)
+      : invoices.find((item) =>
+          invoiceTickets.get(item.id).some((ticket) => input.tickets.includes(ticket.id)),
+        );
+    if (!invoice || invoice.userId !== current.id) {
+      send({}, 403);
+      return;
+    }
+    const tickets = invoiceTickets
+      .get(invoice.id)
+      .filter((ticket) => (all ? ticket.state === "PAID" : input.tickets.includes(ticket.id)));
+    if (
+      invoice.state !== "PAID" ||
+      !tickets.length ||
+      tickets.some((ticket) => ticket.state !== "PAID")
+    ) {
+      send({ detail: "Este ticket no puede cancelarse" }, 400);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const amount = tickets.reduce((sum, ticket) => sum + ticket.amount, 0);
+    for (const ticket of tickets) ticket.state = "CANCELLED";
+    if (!invoiceTickets.get(invoice.id).some((ticket) => ticket.state === "PAID")) {
+      invoice.state = "CANCELLED";
+    }
+    const refund = Math.round(amount * 50) / 100;
+    invoice.refundedAmount = (invoice.refundedAmount ?? 0) + refund;
+    wallet.amount += refund;
+    transactions.get(current.id).unshift({
+      id: 300 + cancellationWrites,
+      transactionType: "REFUND",
+      amount: refund,
+      createdAt: invoice.paymentDate,
+      description: "Devolucion por cancelacion propia de tickets",
+    });
+    cancellationWrites++;
+    if (uncertainCancellation) {
+      send({}, 503);
+      return;
+    }
+    response.writeHead(204);
+    response.end();
+    return;
+  }
   const match = request.url.match(/^\/api\/v1\/payments\/(\d+)(\/tickets)?$/);
   if (match) {
     const invoice = invoices.find((item) => item.id === Number(match[1]));
@@ -144,26 +215,7 @@ const api = http.createServer(async (request, response) => {
       send(invoice);
       return;
     }
-    send(
-      invoice.typeInvoice === "RENTAL_PAYMENT"
-        ? []
-        : [
-            {
-              id: 101,
-              invoiceId: invoice.id,
-              amount: 25,
-              position: { row: 1, column: 2 },
-              paymentDate: invoice.paymentDate,
-            },
-            {
-              id: 102,
-              invoiceId: invoice.id,
-              amount: 25,
-              position: { row: 1, column: 3 },
-              paymentDate: invoice.paymentDate,
-            },
-          ],
-    );
+    send(invoiceTickets.get(invoice.id));
     return;
   }
   send({}, 404);
@@ -326,7 +378,123 @@ try {
     true,
   );
   await page.screenshot({ path: "test-results/customer-invoice-mobile.png", fullPage: true });
+  await expect(
+    page.getByRole("button", { name: "Cancelar seleccionados (0)", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("checkbox", { name: "Seleccionar ticket #101", exact: true }).check();
+  await page.getByRole("button", { name: "Cancelar seleccionados (1)", exact: true }).click();
+  const cancellation = page.getByRole("dialog", {
+    name: "Cancelar tickets seleccionados",
+    exact: true,
+  });
+  await expect(cancellation).toContainText("Reembolso estimado (50 %)");
+  await expect(cancellation).toContainText("Q 12.50");
+  await page.screenshot({ path: "test-results/customer-cancellation-mobile.png", fullPage: true });
+  await cancellation.getByRole("button", { name: "Volver", exact: true }).click();
+  assert.equal(cancellationAttempts, 0);
+  await page.getByRole("button", { name: "Cancelar seleccionados (1)", exact: true }).click();
+  await cancellation
+    .getByRole("button", { name: "Confirmar cancelación", exact: true })
+    .evaluate((button) => {
+      button.click();
+      button.click();
+    });
+  await expect(
+    cancellation.getByRole("button", { name: "Cancelando…", exact: true }),
+  ).toBeDisabled();
+  await expect(cancellation).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Cancelación registrada" }),
+  ).toBeVisible();
+  await expect(page.getByRole("article", { name: "Ticket #101", exact: true })).toContainText(
+    "Cancelado",
+  );
+  await expect(
+    page.getByRole("checkbox", { name: "Seleccionar ticket #101", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("checkbox", { name: "Seleccionar ticket #102", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Detalle de la factura", exact: true }),
+  ).toContainText("Q 50.00");
+  await expect(
+    page.getByText("Devuelto por cancelación propia", { exact: true }).locator(".."),
+  ).toContainText("Q 12.50");
+  assert.equal(cancellationAttempts, 1);
+  assert.equal(cancellationWrites, 1);
+  assert.equal(wallets.get(7).amount, 153);
+  await page.reload();
+  await expect(
+    page.getByText("Devuelto por cancelación propia", { exact: true }).locator(".."),
+  ).toContainText("Q 12.50");
+  await page.getByRole("button", { name: "Cancelar todos los vigentes", exact: true }).click();
+  const allCancellation = page.getByRole("dialog", {
+    name: "Cancelar todos los tickets vigentes",
+    exact: true,
+  });
+  await expect(allCancellation).toContainText("Se cancelarán 1 ticket(s)");
+  await expect(allCancellation).toContainText("Q 12.50");
+  await allCancellation.getByRole("button", { name: "Confirmar cancelación", exact: true }).click();
+  await expect(allCancellation).toHaveCount(0);
+  await expect(page.getByRole("article", { name: "Ticket #102", exact: true })).toContainText(
+    "Cancelado",
+  );
+  await expect(
+    page.getByRole("button", { name: "Cancelar todos los vigentes", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Ver opciones de devolución", exact: true }),
+  ).toHaveCount(0);
+  assert.equal(cancellationAttempts, 2);
+  assert.equal(cancellationWrites, 2);
+  assert.equal(wallets.get(7).amount, 165.5);
+  await expect(
+    page.getByText("Devuelto por cancelación propia", { exact: true }).locator(".."),
+  ).toContainText("Q 25.00");
+  await expect(
+    page.getByRole("region", { name: "Detalle de la factura", exact: true }),
+  ).toContainText("Q 50.00");
+  const availableRefunds = await context.request.get(base + "/api/customer/refunds");
+  assert.equal(availableRefunds.status(), 200);
+  assert.ok(!(await availableRefunds.json()).some((item) => item.id === 10));
+  assert.equal(
+    (
+      await context.request.post(base + "/api/customer/refunds/10", {
+        headers: { Origin: base },
+        data: { invoiceId: 10 },
+      })
+    ).status(),
+    409,
+  );
+  await page.goto(base + "/customer/purchases/13");
+  await page.getByRole("checkbox", { name: "Seleccionar ticket #130", exact: true }).check();
+  await page.getByRole("button", { name: "Cancelar seleccionados (1)", exact: true }).click();
+  uncertainCancellation = true;
+  await cancellation.getByRole("button", { name: "Confirmar cancelación", exact: true }).click();
+  await expect(cancellation.getByRole("alert")).toContainText("podría haberse registrado");
+  await expect(
+    cancellation.getByRole("button", { name: "Confirmar cancelación", exact: true }),
+  ).toHaveCount(0);
+  assert.equal(cancellationAttempts, 3);
+  assert.equal(cancellationWrites, 3);
+  await cancellation.getByRole("button", { name: "Actualizar tickets", exact: true }).click();
+  await expect(page.getByRole("article", { name: "Ticket #130", exact: true })).toContainText(
+    "Cancelado",
+  );
+  await expect(
+    page.getByRole("checkbox", { name: "Seleccionar ticket #130", exact: true }),
+  ).toHaveCount(0);
+  uncertainCancellation = false;
+  await page.getByRole("link", { name: "Ver mi billetera y movimientos", exact: true }).click();
+  await expect(page.getByTestId("customer-wallet-balance")).toHaveText("Q 178.00");
+  await page.goto(base + "/customer/purchases/10");
   await page.getByRole("link", { name: "Volver a mis compras", exact: true }).click();
+  const cancelledPurchase = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name: "Factura #10", exact: true }) });
+  await expect(cancelledPurchase).toContainText("Q 50.00");
+  await expect(cancelledPurchase).toContainText("Q 25.00");
   await page.getByRole("link", { name: "Factura #11", exact: true }).click();
   await expect(
     page.getByText("Esta factura corresponde a un alquiler y no contiene tickets.", {
@@ -347,7 +515,7 @@ try {
   await second.close();
   assert.equal(rechargeWrites, 2);
   process.stdout.write(
-    "PASS: navegación de cliente, permisos, saldo, movimientos, paginación, recarga única, rechazo, resultado incierto sin reenvío, aislamiento entre clientes, facturas, tickets, alquiler sin tickets y vista móvil.\n",
+    "PASS: navegación de cliente, permisos, billetera, recargas, facturas, tickets, cancelación parcial y total con abono del 50%, estados persistentes, doble clic, resultado incierto sin reenvío, sin devolución duplicada, aislamiento entre clientes y vista móvil.\n",
   );
 } catch (error) {
   process.stderr.write(String(error) + "\n");

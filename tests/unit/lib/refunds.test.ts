@@ -21,7 +21,7 @@ const invoice = {
   totalAmount: 50,
   paymentDate: "2026-10-26T12:00:00",
   typeInvoice: "TICKET_PAYMENT",
-  state: "CANCELLED",
+  state: "REFUND",
 };
 const branch = { branchId: 2, branchName: "Central" };
 const ticket = {
@@ -50,6 +50,17 @@ function request(
   });
 }
 describe("Devoluciones: acceso, sucursal y confirmación", () => {
+  it("no ofrece otra devolución tras cancelar todos los tickets aunque se conserve el total original", async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json([{ ...invoice, state: "CANCELLED", refundedAmount: 25 }]),
+    );
+    expect(await (await refundGet("customer")).json()).toEqual([]);
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({ ...invoice, state: "CANCELLED", refundedAmount: 25 }),
+    );
+    expect((await refundPost(request(), "customer", "10")).status).toBe(409);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.session.mockResolvedValue(customer);

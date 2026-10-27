@@ -15,11 +15,20 @@ export async function requireAdminAccess() {
   return { user, token };
 }
 export async function adminRequest(
-  path: "users" | "roles" | "users/cashiers",
+  path:
+    | "users"
+    | "roles"
+    | "users/cashiers"
+    | `users?${string}`
+    | `users/${number}/branches`
+    | "users/branch-administrators",
   token: string,
   body?: unknown,
 ): Promise<unknown> {
   const base = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
+  const assignment = path === "users/branch-administrators";
+  const uncertainAssignment =
+    "No se pudo confirmar la asignación. Actualiza las sucursales del usuario antes de volver a enviarla.";
   let response: Response;
   try {
     response = await fetch(`${base}/api/v1/${path}`, {
@@ -37,11 +46,11 @@ export async function adminRequest(
     throw new ApplicationError(
       "system.internal_error",
       502,
-      "No se pudo conectar al servicio de usuarios.",
+      assignment ? uncertainAssignment : "No se pudo conectar al servicio de usuarios.",
     );
   }
   if (!response.ok) {
-    const detail =
+    let detail =
       response.status === 409
         ? "Ya existe una cuenta o persona con ese correo, DPI o NIT. Revisa los datos."
         : response.status === 401
@@ -51,11 +60,35 @@ export async function adminRequest(
             : response.status === 400
               ? "Los datos no fueron aceptados. Revisa los campos y el rol seleccionado."
               : "El servicio de usuarios no pudo completar la operación.";
+    if (assignment) {
+      if (response.status >= 500) detail = uncertainAssignment;
+      else if (response.status === 409)
+        detail = "El servicio rechazó la asignación de esta sucursal al administrador.";
+      if (response.status === 400 || response.status === 409 || response.status === 422) {
+        try {
+          const problem: unknown = await response.json();
+          if (
+            problem &&
+            typeof problem === "object" &&
+            "detail" in problem &&
+            typeof problem.detail === "string" &&
+            problem.detail.trim()
+          )
+            detail = problem.detail.slice(0, 1000);
+        } catch {
+          /* Conserva el mensaje general. */
+        }
+      }
+    }
     throw new ApplicationError(
       response.status === 409 ? "resource.conflict" : "system.internal_error",
       response.status,
       detail,
     );
+  }
+  if (assignment) {
+    if (response.status === 204) return null;
+    throw new ApplicationError("system.internal_error", 502, uncertainAssignment);
   }
   try {
     return await response.json();

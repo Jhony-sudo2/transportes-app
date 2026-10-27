@@ -22,6 +22,7 @@ const authenticatedPages = [
   "/mi-cuenta/contrasena",
   "/system-admin",
   "/system-admin/users",
+  "/system-admin/users/new",
   "/system-admin/branches",
   "/branch-admin",
   "/branch-admin/buses",
@@ -77,10 +78,12 @@ export function middleware(request: NextRequest): NextResponse {
     path === "/api/customer/wallet/recharges" ||
     path === "/api/customer/purchases" ||
     /^\/api\/customer\/purchases\/[^/]+$/.test(path) ||
+    /^\/api\/customer\/purchases\/[^/]+\/cancellation$/.test(path) ||
     path === "/api/account/profile" ||
     path === "/api/account/password" ||
     /^\/api\/account\/profile\/operations\/[^/]+$/.test(path) ||
     path === "/api/admin/users" ||
+    /^\/api\/admin\/users\/[^/]+\/branches$/.test(path) ||
     path === "/api/admin/roles" ||
     path === "/api/branch-admin/context" ||
     path === "/api/branch-admin/buses" ||

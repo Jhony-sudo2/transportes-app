@@ -32,6 +32,7 @@ export const CustomerInvoiceSchema = z.object({
   branchId: CommerceIdSchema,
   userId: CommerceIdSchema.nullable(),
   totalAmount: money,
+  refundedAmount: money.nullish(),
   paymentDate: dateTime,
   chanel: z.string().nullish(),
   sellerUserId: CommerceIdSchema.nullish(),
@@ -46,11 +47,27 @@ export const CustomerTicketSchema = z.object({
   amount: money,
   position: z.object({ row: CommerceIdSchema, column: CommerceIdSchema }),
   paymentDate: dateTime,
+  state: z.string().nullish(),
 });
 export const CustomerInvoiceDetailSchema = z.object({
   invoice: CustomerInvoiceSchema,
   tickets: z.array(CustomerTicketSchema),
 });
+export const CustomerCancellationSchema = z.discriminatedUnion("scope", [
+  z.object({ scope: z.literal("invoice") }).strict(),
+  z
+    .object({
+      scope: z.literal("tickets"),
+      tickets: z
+        .array(CommerceIdSchema)
+        .nonempty()
+        .refine(
+          (ids) => new Set(ids).size === ids.length,
+          "No repitas identificadores de tickets.",
+        ),
+    })
+    .strict(),
+]);
 export type CustomerWalletOverview = z.infer<typeof CustomerWalletOverviewSchema>;
 export type CustomerTransaction = z.infer<typeof CustomerTransactionSchema>;
 export type CustomerInvoice = z.infer<typeof CustomerInvoiceSchema>;

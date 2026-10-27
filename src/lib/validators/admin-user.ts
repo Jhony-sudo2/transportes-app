@@ -4,6 +4,7 @@ import { ManagedBranchIdSchema } from "./branch-context";
 export const ADMIN_ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrador del sistema",
   CUSTOMER: "Cliente",
+  DRIVER: "Conductor",
   SUCURSAL_ADMIN: "Administrador de sucursal",
   CAJERO: "Cajero",
   CASHIER: "Cajero",
@@ -32,6 +33,24 @@ export const CreatedAdminUserSchema = TransportUserSchema.pick({
   email: true,
   role: true,
 });
+export const AdminUserSchema = CreatedAdminUserSchema.extend({
+  isActive: z.boolean(),
+  branchIds: z.array(ManagedBranchIdSchema).nullish(),
+});
+export const AdminUsersPageSchema = z.object({
+  content: z.array(AdminUserSchema),
+  page: z.number().int().nonnegative().safe(),
+  size: z.number().int().positive().safe(),
+  totalElements: z.number().int().nonnegative().safe(),
+  totalPages: z.number().int().nonnegative().safe(),
+});
+export const AdminUsersQuerySchema = z.object({
+  page: z.coerce.number().int().min(0).max(2147483647).default(0),
+  email: z.string().trim().max(255).default(""),
+});
+export const AssignAdminBranchSchema = z.object({ branchId: ManagedBranchIdSchema }).strict();
+export const AdminBranchIdsSchema = z.array(ManagedBranchIdSchema);
+export type AdminUser = z.infer<typeof AdminUserSchema>;
 export const CreateBranchCashierSchema = CreateAdminUserSchema.pick({
   person: true,
   email: true,

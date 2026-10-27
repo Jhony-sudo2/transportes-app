@@ -33,9 +33,16 @@ const columns: Column<CustomerInvoice>[] = [
   },
   {
     key: "totalAmount",
-    header: "Total",
+    header: "Total de compra",
     render: (_value, item) => (
       <span className="whitespace-nowrap font-semibold">{formatCurrency(item.totalAmount)}</span>
+    ),
+  },
+  {
+    key: "refundedAmount",
+    header: "Devuelto por cancelación propia",
+    render: (_value, item) => (
+      <span className="whitespace-nowrap">{formatCurrency(item.refundedAmount ?? 0)}</span>
     ),
   },
   {

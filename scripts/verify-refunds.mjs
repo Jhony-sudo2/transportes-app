@@ -36,7 +36,7 @@ const template = {
   sellerUserId: 99,
   typeInvoice: "TICKET_PAYMENT",
   customerNit: "CF",
-  state: "CANCELLED",
+  state: "REFUND",
 };
 const invoices = [
   { ...template, ...branch },
@@ -109,7 +109,7 @@ const api = http.createServer(async (request, response) => {
         : actor.role.name !== "CAJERO" || item.branchId !== actor.branchIds[0]
     )
       return send({}, 403);
-    if (item.state !== "CANCELLED") return send({ detail: "Ya reembolsada" }, 409);
+    if (item.state !== "REFUND") return send({ detail: "Ya reembolsada" }, 409);
     if (item.id === 13)
       return send({ detail: "Saldo insuficiente en la billetera de la sucursal" }, 409);
     await new Promise((resolve) => setTimeout(resolve, 300));

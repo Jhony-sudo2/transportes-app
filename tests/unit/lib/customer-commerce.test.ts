@@ -104,6 +104,21 @@ describe("Commerce del cliente autenticado", () => {
       tickets: [ticket],
     });
   });
+  it.each([null, 0, 12.5, 25])(
+    "conserva refundedAmount=%s en el listado y detalle sin alterar el total original",
+    async (refundedAmount) => {
+      const updated = { ...invoice, refundedAmount };
+      mocks.fetch
+        .mockResolvedValueOnce(Response.json([updated]))
+        .mockResolvedValueOnce(Response.json(updated))
+        .mockResolvedValueOnce(Response.json([ticket]));
+      expect(await (await purchases()).json()).toEqual([updated]);
+      expect(await (await detail(detailRequest(), context())).json()).toEqual({
+        invoice: updated,
+        tickets: [ticket],
+      });
+    },
+  );
   it.each(["ADMIN", "SUCURSAL_ADMIN", "DRIVER", "CAJERO"])("rechaza el rol %s", async (role) => {
     mocks.session.mockResolvedValue({ ...user, role: { id: 1, name: role } });
     expect((await wallet()).status).toBe(403);

@@ -5,9 +5,44 @@ import {
   CreateAdminUserSchema,
   AdminRoleListSchema,
   isCreatableRole,
+  AdminUsersPageSchema,
+  AdminUsersQuerySchema,
 } from "@/lib/validators/admin-user";
 import { TransportUserSchema } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
+export async function GET(request: NextRequest) {
+  try {
+    const { token } = await requireAdminAccess();
+    const params = request.nextUrl.searchParams;
+    const parsed = AdminUsersQuerySchema.safeParse({
+      page: params.get("page") ?? undefined,
+      email: params.get("email") ?? undefined,
+    });
+    if (!parsed.success)
+      throw new ApplicationError(
+        "validation.failed",
+        400,
+        "Revisa el correo y la página solicitada.",
+      );
+    const query = new URLSearchParams({
+      page: String(parsed.data.page),
+      size: "10",
+      sortBy: "id",
+      ascending: "false",
+      email: parsed.data.email,
+    });
+    const result = AdminUsersPageSchema.safeParse(await adminRequest(`users?${query}`, token));
+    if (!result.success || result.data.page !== parsed.data.page || result.data.size !== 10)
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "El listado de usuarios no tiene el formato esperado.",
+      );
+    return NextResponse.json(result.data);
+  } catch (error) {
+    return adminErrorResponse(error);
+  }
+}
 export async function POST(request: NextRequest) {
   try {
     if (request.headers.get("origin") !== request.nextUrl.origin)

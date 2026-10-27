@@ -38,12 +38,14 @@ export async function commerceRequest(
   path: string,
   token: string,
   body?: unknown,
-  operation: "recharge" | "refund" = "recharge",
+  operation: "recharge" | "refund" | "cancellation" = "recharge",
 ): Promise<unknown> {
   const uncertainMessage =
-    operation === "refund"
-      ? "No se pudo confirmar la devolución. Actualiza la factura y revisa los movimientos antes de volver a enviarla."
-      : "No se pudo confirmar la recarga. Revisa tu saldo y movimientos antes de volver a enviarla.";
+    operation === "cancellation"
+      ? "No se pudo confirmar la cancelación. Actualiza los tickets y revisa los movimientos de tu billetera antes de volver a enviarla."
+      : operation === "refund"
+        ? "No se pudo confirmar la devolución. Actualiza la factura y revisa los movimientos antes de volver a enviarla."
+        : "No se pudo confirmar la recarga. Revisa tu saldo y movimientos antes de volver a enviarla.";
   const base = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
   let response: Response;
   try {
@@ -81,9 +83,11 @@ export async function commerceRequest(
               ? "No se pudieron consultar tus datos en Commerce."
               : response.status >= 500
                 ? uncertainMessage
-                : operation === "refund"
-                  ? "La devolución no fue aceptada."
-                  : "La recarga no fue aceptada.";
+                : operation === "cancellation"
+                  ? "La cancelación no fue aceptada."
+                  : operation === "refund"
+                    ? "La devolución no fue aceptada."
+                    : "La recarga no fue aceptada.";
     if (response.status === 400 || response.status === 409) {
       try {
         const problem: unknown = await response.json();
@@ -104,6 +108,10 @@ export async function commerceRequest(
       response.status === 401 ? 502 : response.status,
       detail,
     );
+  }
+  if (operation === "cancellation") {
+    if (response.status === 204) return null;
+    throw new ApplicationError("system.internal_error", 502, uncertainMessage);
   }
   try {
     return await response.json();

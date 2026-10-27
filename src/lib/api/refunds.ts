@@ -99,7 +99,10 @@ export async function refundGet(actor: RefundActor, id?: string) {
     }
     const invoices = await getCustomerInvoices(access);
     return NextResponse.json(
-      invoices.filter((invoice) => ["CANCELLED", "REIMBURSED"].includes(invoice.state)),
+      invoices.filter(
+        (invoice) =>
+          invoice.state === "REIMBURSED" || (invoice.state === "REFUND" && invoice.totalAmount > 0),
+      ),
     );
   } catch (error) {
     return adminErrorResponse(error);
@@ -126,7 +129,7 @@ export async function refundPost(request: NextRequest, actor: RefundActor, id: s
         "Envía únicamente el número de esta factura.",
       );
     const invoice = await getInvoice(actor, parsedId.data, access);
-    if (invoice.state !== "CANCELLED")
+    if (invoice.state !== "REFUND" || invoice.totalAmount <= 0)
       throw new ApplicationError(
         "validation.failed",
         409,

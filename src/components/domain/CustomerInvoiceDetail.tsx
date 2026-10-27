@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
-import { ArrowLeft, Ticket } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
 import { useCustomerData } from "@/hooks/useCustomerData";
 import { CustomerInvoiceDetailSchema } from "@/lib/validators/customer-commerce";
 import { invoiceTypeLabels, invoiceStateLabels } from "@/lib/customer-commerce-ui";
 import { formatCurrency, formatDateTime } from "@/lib/utils/format";
 import { CustomerDataState } from "./CustomerDataState";
+import { CustomerTicketCancellation } from "./CustomerTicketCancellation";
 
 export function CustomerInvoiceDetail({ invoiceId }: { invoiceId: number }) {
   const resource = useCustomerData(
@@ -13,6 +15,7 @@ export function CustomerInvoiceDetail({ invoiceId }: { invoiceId: number }) {
     CustomerInvoiceDetailSchema,
   );
   const invoice = resource.data?.invoice;
+  const [notice, setNotice] = useState("");
   return (
     <section className="mx-auto max-w-6xl space-y-7 px-5 py-10 md:px-8 md:py-12">
       <Link
@@ -33,16 +36,23 @@ export function CustomerInvoiceDetail({ invoiceId }: { invoiceId: number }) {
         error={resource.error}
         retry={resource.refresh}
       />
+      {notice && (
+        <p
+          role="status"
+          className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm"
+        >
+          {notice}
+        </p>
+      )}
       {invoice && resource.data && (
         <>
-          {["CANCELLED", "REIMBURSED"].includes(invoice.state) && (
+          {(invoice.state === "REIMBURSED" ||
+            (invoice.state === "REFUND" && invoice.totalAmount > 0)) && (
             <Link
               href={"/customer/refunds/" + invoice.id}
               className="inline-block rounded-xl border border-[var(--tg-line)] bg-[var(--tg-paper)] px-5 py-4 text-sm font-semibold text-[var(--tg-green)] underline underline-offset-4"
             >
-              {invoice.state === "CANCELLED"
-                ? "Ver opciones de devolución"
-                : "Consultar devolución"}
+              {invoice.state === "REFUND" ? "Ver opciones de devolución" : "Consultar devolución"}
             </Link>
           )}
           <section
@@ -71,6 +81,7 @@ export function CustomerInvoiceDetail({ invoiceId }: { invoiceId: number }) {
                       : invoice.chanel || "—",
                 ],
                 ["NIT de facturación", invoice.customerNit || "—"],
+                ["Devuelto por cancelación propia", formatCurrency(invoice.refundedAmount ?? 0)],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-[var(--tg-muted)]">{label}</dt>
@@ -78,52 +89,22 @@ export function CustomerInvoiceDetail({ invoiceId }: { invoiceId: number }) {
                 </div>
               ))}
             </dl>
-          </section>
-          <section className="space-y-5" aria-label="Tickets de la factura">
-            <h2 className="text-xl font-semibold">
-              Tickets asociados{" "}
-              <span className="text-[var(--tg-muted)]">({resource.data.tickets.length})</span>
-            </h2>
-            {!resource.data.tickets.length ? (
-              <p className="rounded-2xl border border-[var(--tg-line)] bg-[var(--tg-paper)] p-6 text-sm text-[var(--tg-muted)]">
-                {invoice.typeInvoice === "RENTAL_PAYMENT"
-                  ? "Esta factura corresponde a un alquiler y no contiene tickets."
-                  : "Esta factura no tiene tickets asociados."}
+            {(invoice.refundedAmount ?? 0) > 0 && (
+              <p className="mt-5 text-sm text-[var(--tg-muted)]">
+                El importe devuelto por cancelación propia es el acumulado que ya se abonó a tu
+                billetera.
               </p>
-            ) : (
-              <div className="grid gap-5 md:grid-cols-2">
-                {resource.data.tickets.map((ticket) => (
-                  <article
-                    key={ticket.id}
-                    className="rounded-2xl border border-[var(--tg-line)] bg-[var(--tg-paper)] p-6"
-                    aria-label={"Ticket #" + ticket.id}
-                  >
-                    <div className="flex items-center justify-between gap-4 border-b border-dashed border-[var(--tg-line)] pb-4">
-                      <h3 className="flex items-center gap-3 font-semibold">
-                        <Ticket size={21} className="text-[var(--tg-green)]" aria-hidden="true" />
-                        Ticket #{ticket.id}
-                      </h3>
-                      <p className="font-semibold">{formatCurrency(ticket.amount)}</p>
-                    </div>
-                    <dl className="mt-5 grid grid-cols-2 gap-5 text-sm">
-                      <div>
-                        <dt className="text-[var(--tg-muted)]">Fila</dt>
-                        <dd className="mt-1 text-xl font-semibold">{ticket.position.row}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[var(--tg-muted)]">Columna</dt>
-                        <dd className="mt-1 text-xl font-semibold">{ticket.position.column}</dd>
-                      </div>
-                      <div className="col-span-2">
-                        <dt className="text-[var(--tg-muted)]">Fecha de compra</dt>
-                        <dd className="mt-2">{formatDateTime(ticket.paymentDate)}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))}
-              </div>
             )}
           </section>
+          <CustomerTicketCancellation
+            invoice={invoice}
+            tickets={resource.data.tickets}
+            refresh={resource.refresh}
+            onSuccess={(message) => {
+              setNotice(message);
+              resource.refresh();
+            }}
+          />
         </>
       )}
     </section>

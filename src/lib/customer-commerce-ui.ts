@@ -11,6 +11,6 @@ export const invoiceTypeLabels: Record<string, string> = {
 export const invoiceStateLabels: Record<string, string> = {
   PAID: "Pagada",
   CANCELLED: "Cancelada",
-  REFUND: "Reembolso",
+  REFUND: "Devolución disponible",
   REIMBURSED: "Reembolsada",
 };

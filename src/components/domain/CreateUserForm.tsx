@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { UserRoundPlus, Mail, CircleCheck, RotateCw } from "lucide-react";
@@ -192,6 +193,14 @@ export function CreateUserForm({
         <Button onClick={() => setCreated(null)}>
           {cashier ? "Crear otro cajero" : "Crear otro usuario"}
         </Button>
+        {!cashier && (
+          <Link
+            href="/system-admin/users"
+            className="mt-4 block text-sm text-[var(--tg-green)] underline underline-offset-4"
+          >
+            Ver usuarios y asignar sucursales
+          </Link>
+        )}
       </section>
     );
   return (
@@ -329,7 +338,7 @@ export function CreateUserForm({
             ? "El cajero quedará vinculado únicamente a " +
               cashierBranch.name +
               ". Recibirá el enlace para establecer su contraseña por correo."
-            : "La asignación de sucursales se realizará desde el módulo correspondiente."}
+            : "Al crear un administrador de sucursal, puedes asignarle sus sucursales desde el listado de usuarios."}
         </p>
       </aside>
     </div>

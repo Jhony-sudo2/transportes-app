@@ -37,15 +37,15 @@ const columns: Column<CustomerInvoice>[] = [
 ];
 export function CustomerRefunds() {
   const resource = useCustomerData("/api/customer/refunds", RefundListSchema);
-  const [state, setState] = useState("CANCELLED");
-  const available = state === "CANCELLED";
+  const [state, setState] = useState("REFUND");
+  const available = state === "REFUND";
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3" aria-label="Filtrar devoluciones">
         <Button
           variant={available ? "default" : "outline"}
           aria-pressed={available}
-          onClick={() => setState("CANCELLED")}
+          onClick={() => setState("REFUND")}
         >
           Disponibles
         </Button>
