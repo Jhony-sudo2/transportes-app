@@ -87,6 +87,7 @@ export function middleware(request: NextRequest): NextResponse {
     path === "/api/admin/roles" ||
     path === "/api/branch-admin/context" ||
     path === "/api/branch-admin/buses" ||
+    /^\/api\/branch-admin\/buses\/[^/]+$/.test(path) ||
     path === "/api/branch-admin/drivers" ||
     path === "/api/branch-admin/cashiers" ||
     path === "/api/branch-admin/license-types" ||

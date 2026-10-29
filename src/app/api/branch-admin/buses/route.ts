@@ -10,17 +10,13 @@ import { adminErrorResponse } from "@/lib/api/admin";
 import { fleetRequest } from "@/lib/api/fleet";
 import { CreateBusSchema, CreatedBusSchema } from "@/lib/validators/fleet-resources";
 import { ApplicationError } from "@/types/error";
+import { readBusMultipart, busMultipart } from "@/lib/api/bus-multipart";
 export async function POST(request: NextRequest) {
   try {
     if (request.headers.get("origin") !== request.nextUrl.origin)
       throw new ApplicationError("auth.forbidden", 403, "Origen no permitido.");
     const workspace = await getBranchWorkspace();
-    let raw: unknown;
-    try {
-      raw = await request.json();
-    } catch {
-      return NextResponse.json({ detail: "Solicitud JSON inválida." }, { status: 400 });
-    }
+    const { raw, photo } = await readBusMultipart(request, true);
     const parsed = CreateBusSchema.safeParse(raw);
     if (!parsed.success)
       return NextResponse.json(
@@ -30,7 +26,7 @@ export async function POST(request: NextRequest) {
     const { token, branchId } = await requireSelectedBranch(parsed.data.branchId, workspace);
     const bus = validatedFleetResult(
       CreatedBusSchema,
-      await fleetRequest("buses", token, { ...parsed.data, branchId }),
+      await fleetRequest("buses", token, busMultipart({ ...parsed.data, branchId }, photo)),
     );
     return NextResponse.json({ bus, branchId }, { status: 201 });
   } catch (error) {

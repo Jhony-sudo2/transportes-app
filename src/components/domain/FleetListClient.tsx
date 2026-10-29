@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { FleetRecordsList, type FleetRecordsActions } from "./FleetRecordsList";
 import { DriverSalaryDialog, DeleteDriverRequestDialog } from "./DriverManagementDialogs";
 import { DriverLicenseDialog } from "./DriverLicenseDialog";
+import { BusPhoto } from "./BusPhoto";
+import { BusEditDialog } from "./BusEditDialog";
 import { canDeleteDriverRequest } from "@/lib/driver-management";
 import type { Column } from "./ReportTable";
 import { busAvailability, driverAvailability } from "@/lib/fleet-availability";
@@ -72,6 +74,11 @@ function StatusBadge({ status, labels }: { status: string; labels: Record<string
   );
 }
 const busColumns: Column<BusListRecord>[] = [
+  {
+    key: "photo",
+    header: "Imagen",
+    render: (_value, bus) => <BusPhoto src={bus.photo} alt={`Bus con placa ${bus.plateNumber}`} />,
+  },
   {
     key: "plateNumber",
     header: "Placa",
@@ -279,7 +286,14 @@ export function FleetListClient({
       branchId={branch.id}
       resource="buses"
       schema={BusListSchema}
-      columns={busColumns}
+      columns={(actions) => [
+        ...busColumns,
+        {
+          key: "color",
+          header: "Editar",
+          render: (_value, bus) => <BusEditDialog bus={bus} branch={branch} actions={actions} />,
+        },
+      ]}
       caption={"Buses de " + branch.name}
       emptyMessage="Aún no hay buses registrados en esta sucursal."
       searchLabel="Buscar por placa, marca o modelo"

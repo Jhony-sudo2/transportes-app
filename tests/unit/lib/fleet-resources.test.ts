@@ -42,6 +42,7 @@ const savedBus = {
   seatRows: 12,
   seatColumns: 4,
   state: "AVAILABLE",
+  photo: "https://storage.googleapis.com/test-bucket/bus.png",
 };
 const driverInput = {
   branchId: 2,
@@ -65,10 +66,23 @@ const savedDriver = {
   pendingOperationId: opId,
 };
 function busRequest(body: unknown, origin = "http://localhost:3000") {
+  const form = new FormData();
+  form.append(
+    "request",
+    new Blob([JSON.stringify(body)], { type: "application/json" }),
+    "request.json",
+  );
+  form.append(
+    "photo",
+    new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])], {
+      type: "image/png",
+    }),
+    "bus.png",
+  );
   return new NextRequest("http://localhost:3000/api/branch-admin/buses", {
     method: "POST",
-    headers: { Origin: origin, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { Origin: origin },
+    body: form,
   });
 }
 function driverRequest(data: unknown = driverInput, photo = true) {
@@ -135,7 +149,13 @@ describe("Alta de buses y choferes por sucursal", () => {
     const [url, options] = mocks.fetch.mock.calls[0] ?? [];
     expect(url).toMatch(/\/api\/v1\/buses$/);
     expect(options.headers.Authorization).toBe("Bearer private-token");
-    expect(JSON.parse(options.body)).toMatchObject({ branchId: 2, capacity: 48 });
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.headers["Content-Type"]).toBeUndefined();
+    expect(JSON.parse(await options.body.get("request").text())).toMatchObject({
+      branchId: 2,
+      capacity: 48,
+    });
+    expect(options.body.get("photo").size).toBe(12);
   });
   it("bloquea otro rol, sucursal cambiada y falta de seleccion", async () => {
     expect((await createBus(busRequest({ ...busInput, branchId: 1 }))).status).toBe(409);
