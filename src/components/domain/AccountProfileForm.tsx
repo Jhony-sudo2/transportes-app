@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { FleetField } from "./FleetField";
 import { DriverProfilePhoto } from "./DriverProfilePhoto";
+import { AccountTwoFactorControl } from "./AccountTwoFactorControl";
 import { useBranchWorkspace } from "@/components/layout/BranchWorkspaceProvider";
 import { readFleetResponse } from "@/lib/fleet-ui";
 import { DriverOperationIdSchema, driverPhotoError } from "@/lib/validators/fleet-resources";
@@ -28,6 +29,9 @@ function values(profile: AccountProfile): AccountProfileRequest {
     phone: profile.user.phone ?? "",
     adress: profile.user.adress ?? "",
     dpi: profile.user.dpi ?? "",
+    ...(profile.user.role.name !== "DRIVER"
+      ? { twoFactorEnabled: profile.user.twoFactorEnabled }
+      : {}),
   };
 }
 async function loadProfile(userId: number, signal?: AbortSignal) {
@@ -330,6 +334,52 @@ export function AccountProfileForm({
             />
           </div>
         </div>
+        <section
+          aria-label="Autenticación de dos factores"
+          className="space-y-3 rounded-2xl border border-[var(--tg-line)] bg-[var(--color-surface)] p-5"
+        >
+          <h3 className="font-semibold">Autenticación de dos factores (2FA)</h3>
+          <p className="text-sm text-[var(--tg-muted)]">
+            Estado actual: {profile.user.twoFactorEnabled ? "activada" : "desactivada"}.
+          </p>
+          {isDriver ? (
+            <AccountTwoFactorControl
+              enabled={profile.user.twoFactorEnabled}
+              onSaved={(twoFactorEnabled) =>
+                setProfile((current) => ({
+                  ...current,
+                  user: { ...current.user, twoFactorEnabled },
+                }))
+              }
+            />
+          ) : (
+            <>
+              <label
+                htmlFor="account-two-factor"
+                className="flex cursor-pointer items-start gap-3 text-sm font-medium"
+              >
+                <input
+                  id="account-two-factor"
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--tg-green)]"
+                  disabled={disabled}
+                  aria-describedby="account-two-factor-help"
+                  {...register("twoFactorEnabled")}
+                />
+                Activar autenticación de dos factores (2FA)
+              </label>
+              <p id="account-two-factor-help" className="text-sm leading-6 text-[var(--tg-muted)]">
+                Al activarla, recibirás un código por correo para completar cada inicio de sesión.
+                Guarda los cambios para aplicar esta preferencia.
+              </p>
+              {errors.twoFactorEnabled && (
+                <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+                  {errors.twoFactorEnabled.message}
+                </p>
+              )}
+            </>
+          )}
+        </section>
         <div className="flex flex-wrap gap-3">
           <Button type="submit" disabled={disabled}>
             {busy ? "Enviando…" : isDriver ? "Enviar cambios" : "Guardar cambios"}

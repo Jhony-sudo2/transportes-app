@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,12 +15,16 @@ import {
 import { CustomerDataState } from "./CustomerDataState";
 import { ReportTable, type Column } from "./ReportTable";
 import { AdminUserBranches } from "./AdminUserBranches";
+import { AdminUserAvailabilityDialog } from "./AdminUserAvailabilityDialog";
 
-export function AdminUsersList() {
+export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [email, setEmail] = useState("");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AdminUser | null>(null);
+  const [statusTarget, setStatusTarget] = useState<AdminUser | null>(null);
+  const [notice, setNotice] = useState("");
   const query = new URLSearchParams({ page: String(page), email });
   const resource = useCustomerData(`/api/admin/users?${query}`, AdminUsersPageSchema);
   const data = resource.data;
@@ -48,9 +53,23 @@ export function AdminUsersList() {
       key: "isActive",
       header: "Estado",
       render: (_value, user) => (
-        <span className="whitespace-nowrap rounded-full border border-[var(--tg-line)] px-3 py-1 text-xs">
-          {user.isActive ? "Activo" : "Inactivo"}
-        </span>
+        <div className="flex flex-col items-start gap-3">
+          <span className="whitespace-nowrap rounded-full border border-[var(--tg-line)] px-3 py-1 text-xs">
+            {user.isActive ? "Activo" : "Inactivo"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setNotice("");
+              setStatusTarget(user);
+            }}
+            aria-label={`${user.isActive ? "Desactivar" : "Activar"} usuario ${user.email}`}
+          >
+            {user.isActive ? "Desactivar" : "Activar"}
+          </Button>
+        </div>
       ),
     },
     {
@@ -138,6 +157,11 @@ export function AdminUsersList() {
         error={resource.error}
         retry={resource.refresh}
       />
+      {notice && (
+        <p role="status" className="tg-notice">
+          {notice}
+        </p>
+      )}
       {data && (
         <>
           {data.content.length ? (
@@ -188,6 +212,24 @@ export function AdminUsersList() {
           user={selected}
           onClose={() => setSelected(null)}
           onAssigned={resource.refresh}
+        />
+      )}
+      {statusTarget && (
+        <AdminUserAvailabilityDialog
+          user={statusTarget}
+          currentUserId={currentUserId}
+          onClose={() => setStatusTarget(null)}
+          refresh={resource.refresh}
+          onUpdated={(user, signedOut) => {
+            setStatusTarget(null);
+            if (signedOut) {
+              router.replace("/login");
+              router.refresh();
+              return;
+            }
+            setNotice(`Cuenta ${user.email} ${user.isActive ? "activada" : "desactivada"}.`);
+            resource.refresh();
+          }}
         />
       )}
     </div>

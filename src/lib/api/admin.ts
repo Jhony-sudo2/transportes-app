@@ -21,18 +21,22 @@ export async function adminRequest(
     | "users/cashiers"
     | `users?${string}`
     | `users/${number}/branches`
+    | `users/${number}/activate`
+    | `users/${number}/deactivate`
     | "users/branch-administrators",
   token: string,
   body?: unknown,
+  method: "GET" | "POST" | "PUT" = body === undefined ? "GET" : "POST",
 ): Promise<unknown> {
   const base = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
   const assignment = path === "users/branch-administrators";
+  const statusChange = /^users\/\d+\/(activate|deactivate)$/.test(path);
   const uncertainAssignment =
     "No se pudo confirmar la asignación. Actualiza las sucursales del usuario antes de volver a enviarla.";
   let response: Response;
   try {
     response = await fetch(`${base}/api/v1/${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method,
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
       headers: {
@@ -60,21 +64,22 @@ export async function adminRequest(
             : response.status === 400
               ? "Los datos no fueron aceptados. Revisa los campos y el rol seleccionado."
               : "El servicio de usuarios no pudo completar la operación.";
-    if (assignment) {
-      if (response.status >= 500) detail = uncertainAssignment;
+    if (assignment || statusChange) {
+      if (response.status >= 500)
+        detail = assignment
+          ? uncertainAssignment
+          : "No se pudo confirmar el cambio de estado. Actualiza el listado antes de volver a intentarlo.";
+      else if (statusChange) detail = "El servicio rechazó el cambio de estado de la cuenta.";
       else if (response.status === 409)
         detail = "El servicio rechazó la asignación de esta sucursal al administrador.";
       if (response.status === 400 || response.status === 409 || response.status === 422) {
         try {
           const problem: unknown = await response.json();
-          if (
-            problem &&
-            typeof problem === "object" &&
-            "detail" in problem &&
-            typeof problem.detail === "string" &&
-            problem.detail.trim()
-          )
-            detail = problem.detail.slice(0, 1000);
+          if (problem && typeof problem === "object") {
+            const message =
+              "detail" in problem ? problem.detail : "message" in problem ? problem.message : null;
+            if (typeof message === "string" && message.trim()) detail = message.slice(0, 1000);
+          }
         } catch {
           /* Conserva el mensaje general. */
         }

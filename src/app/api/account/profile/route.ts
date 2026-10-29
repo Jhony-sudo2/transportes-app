@@ -180,7 +180,7 @@ export async function PUT(request: NextRequest) {
       await accountIamRequest(
         `users/${access.user.id}`,
         access.token,
-        { ...fields, twoFactorEnabled: access.user.twoFactorEnabled },
+        { ...fields, twoFactorEnabled: data.twoFactorEnabled ?? access.user.twoFactorEnabled },
         "PUT",
       ),
       "No se pudo confirmar el perfil actualizado.",
@@ -193,7 +193,8 @@ export async function PUT(request: NextRequest) {
       updated.email !== data.email ||
       updated.nit !== data.nit ||
       updated.phone !== data.phone ||
-      updated.adress !== data.adress
+      updated.adress !== data.adress ||
+      updated.twoFactorEnabled !== (data.twoFactorEnabled ?? access.user.twoFactorEnabled)
     )
       throw new ApplicationError(
         "system.internal_error",

@@ -7,6 +7,7 @@ import {
 } from "./fleet-resources";
 
 const required = z.string().trim().min(1, "Este campo es obligatorio");
+export const AccountTwoFactorSchema = z.object({ twoFactorEnabled: z.boolean() }).strict();
 export const AccountProfileRequestSchema = z
   .object({
     name: required.max(255),
@@ -16,9 +17,11 @@ export const AccountProfileRequestSchema = z
     phone: required.max(20),
     adress: required.max(100),
     dpi: z.string().trim().max(50),
+    twoFactorEnabled: z.boolean().optional(),
   })
   .strict();
 export const DriverProfileRequestSchema = AccountProfileRequestSchema.extend({
+  twoFactorEnabled: z.never().optional(),
   dpi: required.max(50),
 });
 export const AccountPasswordRequestSchema = z

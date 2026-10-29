@@ -57,10 +57,10 @@ export async function getAccountProfile(access?: Awaited<ReturnType<typeof requi
   return AccountProfileSchema.parse({ user: current.user, driver });
 }
 export async function accountIamRequest(
-  path: `users/${number}` | "users/profile/password",
+  path: `users/${number}` | "users/profile/password" | "users/profile/two-factor",
   token: string,
   body: unknown,
-  method: "PUT" | "POST",
+  method: "PUT" | "POST" | "PATCH",
 ): Promise<unknown> {
   const base = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
   let response: Response;
@@ -71,10 +71,10 @@ export async function accountIamRequest(
       signal: AbortSignal.timeout(15000),
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   } catch {
     throw new ApplicationError(

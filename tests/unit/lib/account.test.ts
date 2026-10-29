@@ -4,6 +4,8 @@ import { NextRequest } from "next/server";
 import { GET as profile, PUT as update } from "@/app/api/account/profile/route";
 import { POST as password } from "@/app/api/account/password/route";
 import { GET as operation } from "@/app/api/account/profile/operations/[operationId]/route";
+import { GET as twoFactorState, PATCH as twoFactor } from "@/app/api/account/two-factor/route";
+import { middleware } from "@/middleware";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(),
@@ -89,6 +91,16 @@ function multipartRequest(photo?: Blob | string, data: unknown = fields) {
     body,
   });
 }
+function twoFactorRequest(
+  body: unknown = { twoFactorEnabled: false },
+  origin = "http://localhost:3000",
+) {
+  return new NextRequest("http://localhost:3000/api/account/two-factor", {
+    method: "PATCH",
+    headers: { Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 const operationRequest = () =>
   new NextRequest("http://localhost:3000/api/account/profile/operations/" + opId);
 const operationContext = (operationId = opId) => ({ params: Promise.resolve({ operationId }) });
@@ -146,6 +158,111 @@ describe("Cuenta propia por rol", () => {
     },
   );
 
+  it.each(
+    ["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "CAJERO"].flatMap((role) =>
+      [true, false].map((enabled) => ({ role, enabled })),
+    ),
+  )("guarda 2FA=$enabled para $role usando su propia cuenta", async ({ role, enabled }) => {
+    const actor = { ...user, role: { id: 1, name: role }, twoFactorEnabled: !enabled };
+    mocks.session.mockResolvedValue(actor);
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({ ...actor, ...fields, twoFactorEnabled: enabled }),
+    );
+    const response = await update(request({ ...fields, twoFactorEnabled: enabled }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).profile.user.twoFactorEnabled).toBe(enabled);
+    expect(JSON.parse(mocks.fetch.mock.calls[0]?.[1].body).twoFactorEnabled).toBe(enabled);
+    expect(mocks.fetch.mock.calls[0]?.[0]).toMatch(/users\/7$/);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each([null, "false", "true", 0, 1])(
+    "exige un booleano para 2FA: %j",
+    async (twoFactorEnabled) => {
+      expect((await update(request({ ...fields, twoFactorEnabled }))).status).toBe(400);
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
+  it("no confirma el guardado si el servicio conserva el segundo factor anterior", async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({ ...user, ...fields, twoFactorEnabled: true }),
+    );
+    expect((await update(request({ ...fields, twoFactorEnabled: false }))).status).toBe(502);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("no envía un cambio de 2FA de chofer al DTO de Fleet que no lo admite", async () => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    expect(
+      (await update(multipartRequest(undefined, { ...fields, twoFactorEnabled: false }))).status,
+    ).toBe(400);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it.each([true, false])(
+    "cambia 2FA del chofer a %s sin datos personales, foto ni llamada a Fleet",
+    async (enabled) => {
+      const actor = { ...user, role: { id: 4, name: "DRIVER" }, twoFactorEnabled: !enabled };
+      mocks.session.mockResolvedValue(actor);
+      mocks.fetch.mockResolvedValueOnce(Response.json({ ...actor, twoFactorEnabled: enabled }));
+      const response = await twoFactor(twoFactorRequest({ twoFactorEnabled: enabled }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ twoFactorEnabled: enabled });
+      const [url, options] = mocks.fetch.mock.calls[0]!;
+      expect(url).toMatch(/users\/profile\/two-factor$/);
+      expect(options.method).toBe("PATCH");
+      expect(options.body).toBeUndefined();
+      expect(options.headers["Content-Type"]).toBeUndefined();
+      expect(options.headers.Authorization).toBe("Bearer private-session");
+      expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("no invierte el 2FA si el estado solicitado ya está aplicado", async () => {
+    expect((await twoFactor(twoFactorRequest({ twoFactorEnabled: true }))).status).toBe(200);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it("consulta el estado del chofer aunque Fleet no esté disponible", async () => {
+    mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
+    expect(await (await twoFactorState()).json()).toEqual({ twoFactorEnabled: true });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it.each([
+    {},
+    { twoFactorEnabled: "false" },
+    { twoFactorEnabled: null },
+    { twoFactorEnabled: false, userId: 99 },
+    { twoFactorEnabled: false, roleId: 1 },
+  ])("rechaza datos de 2FA inválidos o ajenos: %j", async (body) => {
+    expect((await twoFactor(twoFactorRequest(body))).status).toBe(400);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it("valida origen y sesión antes de alternar 2FA", async () => {
+    expect((await twoFactor(twoFactorRequest(undefined, "https://otro.example"))).status).toBe(403);
+    mocks.session.mockResolvedValue(null);
+    expect((await twoFactor(twoFactorRequest())).status).toBe(401);
+    expect((await twoFactorState()).status).toBe(401);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it.each([
+    { id: 99, twoFactorEnabled: false },
+    { role: { id: 4, name: "DRIVER" }, twoFactorEnabled: false },
+    { twoFactorEnabled: true },
+  ])("no confirma otro usuario, rol o estado: %j", async (change) => {
+    mocks.fetch.mockResolvedValueOnce(Response.json({ ...user, ...change }));
+    expect((await twoFactor(twoFactorRequest())).status).toBe(502);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("no reintenta el cambio tras un timeout; al consultar detecta el valor ya aplicado", async () => {
+    mocks.fetch.mockRejectedValueOnce(new Error("timeout después de guardar"));
+    expect((await twoFactor(twoFactorRequest())).status).toBe(502);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    mocks.session.mockResolvedValue({ ...user, twoFactorEnabled: false });
+    expect(await (await twoFactorState()).json()).toEqual({ twoFactorEnabled: false });
+    expect((await twoFactor(twoFactorRequest())).status).toBe(200);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("habilita la ruta de 2FA sin caché", () => {
+    const response = middleware(twoFactorRequest());
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
   it("el chofer se actualiza por Fleet y devuelve una referencia pendiente", async () => {
     mocks.session.mockResolvedValue({ ...user, role: { id: 4, name: "DRIVER" } });
     mocks.fetch
@@ -311,13 +428,7 @@ describe("Cuenta propia por rol", () => {
 
   it("valida origen, campos permitidos y DPI conservado en cuentas normales", async () => {
     expect((await update(request(fields, "profile", "https://otro.example"))).status).toBe(403);
-    for (const extra of [
-      { id: 99 },
-      { userId: 99 },
-      { roleId: 1 },
-      { twoFactorEnabled: false },
-      { baseSalary: 9999 },
-    ])
+    for (const extra of [{ id: 99 }, { userId: 99 }, { roleId: 1 }, { baseSalary: 9999 }])
       expect((await update(request({ ...fields, ...extra }))).status).toBe(400);
     expect((await update(request({ ...fields, dpi: "otro-dpi" }))).status).toBe(400);
     expect(mocks.fetch).not.toHaveBeenCalled();
