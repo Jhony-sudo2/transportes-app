@@ -80,13 +80,16 @@ export function middleware(request: NextRequest): NextResponse {
     /^\/api\/customer\/purchases\/[^/]+$/.test(path) ||
     /^\/api\/customer\/purchases\/[^/]+\/cancellation$/.test(path) ||
     path === "/api/account/profile" ||
+    path === "/api/account/two-factor" ||
     path === "/api/account/password" ||
     /^\/api\/account\/profile\/operations\/[^/]+$/.test(path) ||
     path === "/api/admin/users" ||
     /^\/api\/admin\/users\/[^/]+\/branches$/.test(path) ||
+    /^\/api\/admin\/users\/[^/]+\/availability$/.test(path) ||
     path === "/api/admin/roles" ||
     path === "/api/branch-admin/context" ||
     path === "/api/branch-admin/buses" ||
+    /^\/api\/branch-admin\/buses\/[^/]+$/.test(path) ||
     path === "/api/branch-admin/drivers" ||
     path === "/api/branch-admin/cashiers" ||
     path === "/api/branch-admin/license-types" ||

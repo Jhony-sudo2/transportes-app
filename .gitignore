@@ -101,6 +101,7 @@ session.json
 /.next-customer-check/
 /.next-refunds-check/
 /.next-users-check/
+/.next-buses-check/
 
 # >>> TRANSPORTES: reglas locales >>>
 # Builds, caches, pruebas temporales y credenciales privadas.

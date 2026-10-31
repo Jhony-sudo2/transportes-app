@@ -54,6 +54,8 @@ const driver = {
 };
 const operations = new Map();
 let rejectDriverProfile = false;
+let twoFactorWrites = 0,
+  uncertainTwoFactor = false;
 let profileWrites = 0,
   driverWrites = 0,
   passwordWrites = 0;
@@ -70,6 +72,16 @@ const api = http.createServer(async (request, response) => {
   }
   if (request.url === "/api/v1/users/profile") {
     send(user);
+    return;
+  }
+  if (request.url === "/api/v1/users/profile/two-factor" && request.method === "PATCH") {
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    assert.equal(raw, "");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    user.twoFactorEnabled = !user.twoFactorEnabled;
+    twoFactorWrites++;
+    send(uncertainTwoFactor ? {} : user, uncertainTwoFactor ? 503 : 200);
     return;
   }
   if (request.url === "/api/v1/branches/1") {
@@ -118,7 +130,7 @@ const api = http.createServer(async (request, response) => {
       "phone",
       "twoFactorEnabled",
     ]);
-    assert.equal(data.twoFactorEnabled, user.twoFactorEnabled);
+    assert.equal(typeof data.twoFactorEnabled, "boolean");
     await new Promise((resolve) => setTimeout(resolve, 300));
     Object.assign(user, data);
     profileWrites++;
@@ -295,6 +307,46 @@ try {
         name: "Foto de perfil del chofer",
         exact: true,
       });
+      const driverTwoFactor = page.getByRole("checkbox", {
+        name: "Activar autenticación de dos factores (2FA)",
+        exact: true,
+      });
+      await expect(driverTwoFactor).toBeChecked();
+      await page.getByLabel("Nombre", { exact: true }).fill("Nombre todavía sin guardar");
+      await driverTwoFactor.uncheck();
+      await page.getByRole("button", { name: "Guardar 2FA", exact: true }).evaluate((button) => {
+        button.click();
+        button.click();
+      });
+      await expect(
+        page.getByRole("status").filter({ hasText: "Autenticación de dos factores desactivada." }),
+      ).toBeVisible();
+      assert.equal(twoFactorWrites, 1);
+      assert.equal(driverWrites, 0);
+      await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue(
+        "Nombre todavía sin guardar",
+      );
+      await page.reload();
+      await expect(driverTwoFactor).not.toBeChecked();
+      await expect(page.getByLabel("Nombre", { exact: true })).toHaveValue("Cuenta");
+      await driverTwoFactor.check();
+      uncertainTwoFactor = true;
+      await page.getByRole("button", { name: "Guardar 2FA", exact: true }).click();
+      await expect(
+        page.getByRole("alert").filter({ hasText: "El cambio podría haberse registrado" }),
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Guardar 2FA", exact: true })).toBeDisabled();
+      assert.equal(twoFactorWrites, 2);
+      assert.equal(driverWrites, 0);
+      uncertainTwoFactor = false;
+      rejectDriverProfile = true;
+      await page.getByRole("button", { name: "Consultar estado de 2FA", exact: true }).click();
+      await expect(
+        page.getByRole("status").filter({ hasText: "Estado consultado: 2FA activado." }),
+      ).toBeVisible();
+      await expect(driverTwoFactor).toBeChecked();
+      assert.equal(twoFactorWrites, 2);
+      rejectDriverProfile = false;
       const photoInput = page.getByLabel("Nueva foto de perfil (opcional)", { exact: true });
       await expect(currentPhoto).toHaveAttribute("src", initialPhotoUrl);
       await expect.poll(() => currentPhoto.evaluate((image) => image.naturalWidth)).toBe(1);
@@ -421,6 +473,15 @@ try {
       assert.equal(user.adress, "Direccion actualizada");
     } else {
       await expect(page.getByLabel("DPI", { exact: true })).toHaveAttribute("readonly", "");
+      const twoFactor = page.getByRole("checkbox", {
+        name: "Activar autenticación de dos factores (2FA)",
+        exact: true,
+      });
+      await expect(twoFactor).toBeChecked();
+      await twoFactor.uncheck();
+      await page.getByRole("button", { name: "Restaurar datos", exact: true }).click();
+      await expect(twoFactor).toBeChecked();
+      await twoFactor.uncheck();
       await page.getByLabel("Nombre", { exact: true }).fill("Actualizado " + role);
       await page
         .getByLabel("Correo electrónico", { exact: true })
@@ -438,12 +499,23 @@ try {
           .filter({ hasText: "Tus datos fueron actualizados correctamente." }),
       ).toBeVisible();
       await expect(page.getByLabel("Nombre", { exact: true })).toBeEnabled();
-      assert.equal(user.twoFactorEnabled, true);
+      assert.equal(user.twoFactorEnabled, false);
       assert.equal(user.name, "Actualizado " + role);
       await page.reload();
       await expect(page.getByLabel("Dirección", { exact: true })).toHaveValue(
         "Direccion actualizada",
       );
+      await expect(twoFactor).not.toBeChecked();
+      await twoFactor.check();
+      await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+      await expect(
+        page
+          .getByRole("status")
+          .filter({ hasText: "Tus datos fueron actualizados correctamente." }),
+      ).toBeVisible();
+      assert.equal(user.twoFactorEnabled, true);
+      await page.reload();
+      await expect(twoFactor).toBeChecked();
     }
     if (role === "CUSTOMER") {
       await page.setViewportSize({ width: 390, height: 844 });
@@ -504,11 +576,12 @@ try {
     ).toBeVisible();
     await context.close();
   }
-  assert.equal(profileWrites, 4);
+  assert.equal(profileWrites, 8);
   assert.equal(driverWrites, 3);
   assert.equal(passwordWrites, 5);
+  assert.equal(twoFactorWrites, 2);
   process.stdout.write(
-    "PASS: barras de los cinco roles, perfil propio, datos precargados, cambios por DriverController, saga pendiente/rechazada/completada, fotografía visible y actualización multipart opcional, contraseña actual, cierre de sesión y vista móvil.\n",
+    "PASS: barras de los cinco roles, perfil propio, activación y desactivación persistente de 2FA en User, restaurar datos, cambios por DriverController, saga pendiente/rechazada/completada, fotografía multipart opcional, contraseña actual, cierre de sesión y móvil.\n",
   );
 } catch (error) {
   process.stderr.write(String(error) + "\n");

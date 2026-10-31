@@ -56,6 +56,9 @@ let listFailure = true,
   assignmentAttempts = 0,
   assignmentWrites = 0,
   creationWrites = 0;
+let statusAttempts = 0,
+  statusWrites = 0,
+  uncertainStatus = false;
 const api = http.createServer(async (request, response) => {
   const send = (data, status = 200) => {
     response.writeHead(status, { "Content-Type": "application/json" });
@@ -74,6 +77,26 @@ const api = http.createServer(async (request, response) => {
       { id: 5, name: "CAJERO" },
     ]);
   if (url.pathname === "/api/v1/branches") return send(catalog);
+  const statusMatch = url.pathname.match(/^\/api\/v1\/users\/(\d+)\/(activate|deactivate)$/);
+  if (statusMatch && request.method === "PUT") {
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    assert.equal(raw, "");
+    statusAttempts++;
+    const target = users.find((user) => user.id === Number(statusMatch[1]));
+    if (!target) return send({}, 404);
+    const isActive = statusMatch[2] === "activate";
+    if (
+      !isActive &&
+      target.role.name === "ADMIN" &&
+      users.filter((user) => user.role.name === "ADMIN" && user.isActive).length <= 1
+    )
+      return send({ detail: "No se puede desactivar al último administrador activo" }, 400);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    target.isActive = isActive;
+    statusWrites++;
+    return send(uncertainStatus ? {} : target, uncertainStatus ? 503 : 200);
+  }
   if (url.pathname === "/api/v1/users" && request.method === "GET") {
     if (listFailure) return send({}, 503);
     assert.equal(url.searchParams.get("size"), "10");
@@ -261,7 +284,9 @@ try {
   await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
   await page.reload();
   const luis = page.getByRole("row").filter({ hasText: "luis@example.com" });
-  await expect(luis.getByRole("button")).toHaveText("Sucursales (1)");
+  await expect(
+    luis.getByRole("button", { name: "Gestionar sucursales de luis@example.com", exact: true }),
+  ).toHaveText("Sucursales (1)");
   await page
     .getByRole("button", { name: "Gestionar sucursales de eva@example.com", exact: true })
     .click();
@@ -303,9 +328,81 @@ try {
   assert.equal(creationWrites, 1);
   await page.getByRole("link", { name: "Ver usuarios y asignar sucursales", exact: true }).click();
   await expect(page.getByRole("cell", { name: "nuevo@example.com", exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Desactivar usuario nuevo@example.com", exact: true })
+    .click();
+  const deactivate = page.getByRole("dialog", { name: "Desactivar usuario", exact: true });
+  await deactivate.getByRole("button", { name: "Cancelar", exact: true }).click();
+  assert.equal(statusAttempts, 0);
+  await page
+    .getByRole("button", { name: "Desactivar usuario nuevo@example.com", exact: true })
+    .click();
+  await deactivate
+    .getByRole("button", { name: "Confirmar desactivación", exact: true })
+    .evaluate((button) => {
+      button.click();
+      button.click();
+    });
+  await expect(deactivate.getByRole("button", { name: "Guardando…", exact: true })).toBeDisabled();
+  await expect(deactivate).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "nuevo@example.com" })).toContainText(
+    "Inactivo",
+  );
+  assert.equal(statusAttempts, 1);
+  assert.equal(statusWrites, 1);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Activar usuario nuevo@example.com", exact: true })
+    .click();
+  const activate = page.getByRole("dialog", { name: "Activar usuario", exact: true });
+  await activate.getByRole("button", { name: "Confirmar activación", exact: true }).click();
+  await expect(activate).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "nuevo@example.com" })).toContainText(
+    "Activo",
+  );
+  assert.equal(statusWrites, 2);
+  await page
+    .getByRole("button", { name: "Desactivar usuario nuevo@example.com", exact: true })
+    .click();
+  uncertainStatus = true;
+  await deactivate.getByRole("button", { name: "Confirmar desactivación", exact: true }).click();
+  await expect(deactivate.getByRole("alert")).toContainText("podría haberse registrado");
+  await expect(
+    deactivate.getByRole("button", { name: "Confirmar desactivación", exact: true }),
+  ).toHaveCount(0);
+  await deactivate.getByRole("button", { name: "Actualizar listado", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: "nuevo@example.com" })).toContainText(
+    "Inactivo",
+  );
+  assert.equal(statusAttempts, 3);
+  assert.equal(statusWrites, 3);
+  uncertainStatus = false;
+  await page.getByLabel("Buscar por correo", { exact: true }).fill("admin@example.com");
+  await page.getByRole("button", { name: "Buscar", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Desactivar usuario admin@example.com", exact: true })
+    .click();
+  await expect(deactivate).toContainText("Esta es tu cuenta");
+  await deactivate.getByRole("button", { name: "Confirmar desactivación", exact: true }).click();
+  await expect(deactivate.getByRole("alert")).toContainText("último administrador activo");
+  assert.equal(
+    (await context.cookies()).some((cookie) => cookie.name === "access_token"),
+    true,
+  );
+  await deactivate.getByRole("button", { name: "Actualizar listado", exact: true }).click();
+  users.push({ ...admin, id: 200, email: "segundo-admin@example.com" });
+  await page
+    .getByRole("button", { name: "Desactivar usuario admin@example.com", exact: true })
+    .click();
+  await deactivate.getByRole("button", { name: "Confirmar desactivación", exact: true }).click();
+  await expect(page).toHaveURL(base + "/login");
+  assert.equal(
+    (await context.cookies()).some((cookie) => cookie.name === "access_token"),
+    false,
+  );
   await context.close();
   process.stdout.write(
-    "PASS: listado paginado, búsqueda, permisos exclusivos de ADMIN, creación de usuarios, sucursales asignadas, asignación única con doble clic, errores de la API sin cambios en backend, resultado incierto sin reenvío y móvil.\n",
+    "PASS: listado, búsqueda, permisos ADMIN, creación, sucursales, activación y desactivación persistentes, confirmación y doble clic, rechazo del último administrador, cierre de sesión al desactivar la propia cuenta, resultado incierto sin reenvío y móvil.\n",
   );
 } catch (error) {
   process.stderr.write(String(error) + "\n");

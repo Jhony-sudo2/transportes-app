@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
-import { DM_Sans, Roboto } from "next/font/google";
+import localFont from "next/font/local";
 import "leaflet/dist/leaflet.css";
 import "@/styles/globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
+const dmSans = localFont({
+  src: "./fonts/DMSans-variable.ttf",
+  weight: "100 900",
   variable: "--font-google-sans",
   display: "swap",
 });
 
-const roboto = Roboto({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
+const roboto = localFont({
+  src: "./fonts/Roboto-variable.ttf",
+  weight: "100 900",
   variable: "--font-roboto",
   display: "swap",
 });

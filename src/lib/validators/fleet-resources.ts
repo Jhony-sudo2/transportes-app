@@ -21,6 +21,26 @@ export const CreateBusSchema = BusFormSchema.transform((data) => ({
   ...data,
   capacity: data.seatRows * data.seatColumns,
 }));
+export const EditBusFormSchema = BusFormSchema.extend({
+  color: required.max(30),
+  plateNumber: required.max(20),
+  brand: required.max(50),
+  year_manufacture: integer.min(1980),
+  currentKm: z.number().int().nonnegative().max(2147483647),
+});
+export const UpdateBusSchema = z
+  .object({
+    branchId: ManagedBranchIdSchema,
+    color: EditBusFormSchema.shape.color,
+    plateNumber: EditBusFormSchema.shape.plateNumber,
+    brand: EditBusFormSchema.shape.brand,
+    model: EditBusFormSchema.shape.model,
+    yearManufacture: EditBusFormSchema.shape.year_manufacture,
+    capacity: integer,
+    seatRows: BusFormSchema.shape.seatRows,
+    seatColumns: BusFormSchema.shape.seatColumns,
+  })
+  .strict();
 export const CreatedBusSchema = z.object({
   id: ManagedBranchIdSchema,
   plateNumber: z.string(),
@@ -32,6 +52,8 @@ export const CreatedBusSchema = z.object({
   seatRows: integer.max(30),
   seatColumns: integer.max(6),
   state: z.string(),
+  photo: z.string().nullish(),
+  color: z.string().nullish(),
 });
 const localDate = z
   .string()
@@ -146,11 +168,12 @@ export const DriverListSchema = z.array(DriverListRecordSchema);
 export type BusListRecord = z.infer<typeof BusListRecordSchema>;
 export type DriverListRecord = z.infer<typeof DriverListRecordSchema>;
 export const MAX_DRIVER_PHOTO_BYTES = 1024 * 1024;
-export function driverPhotoError(photo: { size: number; type: string } | null): string | null {
+export function fleetPhotoError(photo: { size: number; type: string } | null): string | null {
   if (!photo || photo.size === 0) return "Selecciona una fotografía.";
   if (!["image/jpeg", "image/png"].includes(photo.type)) return "Usa una fotografía JPG o PNG.";
   return photo.size > MAX_DRIVER_PHOTO_BYTES ? "La fotografía debe pesar como máximo 1 MB." : null;
 }
+export const driverPhotoError = fleetPhotoError;
 export type BusFormData = z.infer<typeof BusFormSchema>;
 export type DriverFormData = z.infer<typeof CreateDriverSchema>;
 export type CreatedBus = z.infer<typeof CreatedBusSchema>;

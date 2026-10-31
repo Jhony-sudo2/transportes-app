@@ -90,7 +90,7 @@ describe("Formulario de creacion administrativa", () => {
       ["Correo electrónico", "juan@example.com"],
     ])
       await user.type(screen.getByLabelText(name as string), value as string);
-    await user.click(screen.getByRole("button", { name: "Crear cajero", exact: true }));
+    await user.click(screen.getByRole("button", { name: /^Crear cajero$/ }));
   }
   it("reutiliza los datos personales con rol fijo y sin consultar el catálogo de admin", async () => {
     fetchMock.mockResolvedValueOnce(
@@ -128,7 +128,7 @@ describe("Formulario de creacion administrativa", () => {
     render(<CreateUserForm cashierBranch={{ id: 2, name: "Central" }} />);
     await completeCashier();
     expect(await screen.findByRole("alert")).toHaveTextContent("Verifica si la cuenta fue creada");
-    expect(screen.getByRole("button", { name: "Crear cajero", exact: true })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Crear cajero$/ })).toBeDisabled();
     expect(screen.getByLabelText("Correo electrónico")).toHaveValue("juan@example.com");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

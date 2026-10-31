@@ -51,6 +51,11 @@ export const AdminUsersQuerySchema = z.object({
 export const AssignAdminBranchSchema = z.object({ branchId: ManagedBranchIdSchema }).strict();
 export const AdminBranchIdsSchema = z.array(ManagedBranchIdSchema);
 export type AdminUser = z.infer<typeof AdminUserSchema>;
+export const AdminUserAvailabilitySchema = z.object({ isActive: z.boolean() }).strict();
+export const AdminUserAvailabilityResponseSchema = z.object({
+  user: AdminUserSchema,
+  signedOut: z.boolean(),
+});
 export const CreateBranchCashierSchema = CreateAdminUserSchema.pick({
   person: true,
   email: true,
