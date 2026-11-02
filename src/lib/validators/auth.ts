@@ -57,6 +57,7 @@ export type SessionData = z.infer<typeof SessionSchema>;
 export const TransportUserSchema = z.object({
   id: z.number().int().positive().safe(),
   email: z.string().email(),
+  emailVerified: z.boolean().optional(),
   role: z.object({
     id: z.number().int(),
     name: z
@@ -75,6 +76,11 @@ export const TransportUserSchema = z.object({
   branchIds: z.array(z.number().int().positive().safe()).nullish(),
   customerId: z.number().int().positive().safe().nullish(),
 });
+// Identity uses address; the existing UI model retains adress.
+export const TransportProfileResponseSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  return { ...raw, ...("address" in raw ? { adress: raw.address } : {}) };
+}, TransportUserSchema);
 export const TransportLoginRequestSchema = LoginRequestSchema.extend({
   email: z.string().trim().email("Correo electrónico inválido").max(255),
   password: z.string().min(1, "La contraseña es requerida").max(100),
@@ -108,9 +114,9 @@ export const TransportRegisterRequestSchema = z
   .object({
     person: z
       .object({
-        name: transportRequiredText.max(255),
-        lastName: transportRequiredText.max(255),
-        dpi: transportRequiredText.max(50),
+        name: transportRequiredText.max(150),
+        lastName: transportRequiredText.max(150),
+        dpi: transportRequiredText.max(32),
         nit: transportRequiredText
           .max(50)
           .refine(
@@ -123,8 +129,8 @@ export const TransportRegisterRequestSchema = z
       .strict(),
     credentials: z
       .object({
-        email: z.string().trim().email("Correo electrónico inválido").max(255),
-        password: z.string().min(8, "Usa al menos 8 caracteres").max(100),
+        email: z.string().trim().email("Correo electrónico inválido").max(254),
+        password: z.string().min(12, "Usa al menos 12 caracteres").max(100),
         confirmPassword: z.string().min(1, "Confirma tu contraseña").max(100),
       })
       .strict()
@@ -167,19 +173,15 @@ export const TransportPasswordTokenSchema = z
   .string()
   .trim()
   .min(1, "Abre el enlace que recibiste por correo")
-  .max(8192)
-  .regex(
-    /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
-    "El enlace no es válido. Solicita uno nuevo.",
-  );
+  .max(8192);
 export const TransportResetPasswordSchema = z
   .object({
     token: TransportPasswordTokenSchema,
     password: z
       .string()
-      .min(6, "Usa al menos 6 caracteres")
-      .max(20, "Usa como máximo 20 caracteres"),
-    confirmPassword: z.string().min(1, "Confirma la contraseña").max(20),
+      .min(12, "Usa al menos 12 caracteres")
+      .max(100, "Usa como máximo 100 caracteres"),
+    confirmPassword: z.string().min(1, "Confirma la contraseña").max(100),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Las contraseñas no coinciden",

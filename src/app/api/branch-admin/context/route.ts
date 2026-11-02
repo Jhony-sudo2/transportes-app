@@ -6,7 +6,7 @@ import { MANAGED_BRANCH_COOKIE } from "@/lib/auth/cookies";
 import { adminErrorResponse } from "@/lib/api/admin";
 import { fleetRequest } from "@/lib/api/fleet";
 import {
-  ManagedBranchChoiceSchema,
+  OperationalBranchSchema,
   ManagedBranchSelectionSchema,
   resolveManagedBranchId,
 } from "@/lib/validators/branch-context";
@@ -15,9 +15,9 @@ import { ApplicationError } from "@/types/error";
 export async function GET() {
   try {
     const { token, branchIds } = await requireBranchAdminAccess();
-    const branches = await Promise.all(
+    const assigned = await Promise.all(
       branchIds.map(async (id) => {
-        const branch = ManagedBranchChoiceSchema.safeParse(
+        const branch = OperationalBranchSchema.safeParse(
           await fleetRequest(`branches/${id}`, token),
         );
         if (!branch.success || branch.data.id !== id)
@@ -29,10 +29,16 @@ export async function GET() {
         return branch.data;
       }),
     );
+    const branches = assigned
+      .filter((branch) => branch.active)
+      .map(({ id, name }) => ({ id, name }));
     const stored = (await cookies()).get(MANAGED_BRANCH_COOKIE)?.value;
     return NextResponse.json({
       branches,
-      selectedBranchId: resolveManagedBranchId(branchIds, stored),
+      selectedBranchId: resolveManagedBranchId(
+        branches.map((branch) => branch.id),
+        stored,
+      ),
     });
   } catch (error) {
     return adminErrorResponse(error);
@@ -42,7 +48,7 @@ export async function PUT(request: NextRequest) {
   try {
     if (request.headers.get("origin") !== request.nextUrl.origin)
       throw new ApplicationError("auth.forbidden", 403, "Origen no permitido.");
-    const { branchIds } = await requireBranchAdminAccess();
+    const { token, branchIds } = await requireBranchAdminAccess();
     let raw: unknown;
     try {
       raw = await request.json();
@@ -54,6 +60,21 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ detail: "Selecciona una sucursal válida." }, { status: 400 });
     if (!branchIds.includes(parsed.data.branchId))
       throw new ApplicationError("auth.forbidden", 403, "No tienes asignada esta sucursal.");
+    const branch = OperationalBranchSchema.safeParse(
+      await fleetRequest(`branches/${parsed.data.branchId}`, token),
+    );
+    if (!branch.success || branch.data.id !== parsed.data.branchId)
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "No se pudo verificar la sucursal seleccionada.",
+      );
+    if (!branch.data.active)
+      throw new ApplicationError(
+        "auth.forbidden",
+        403,
+        "Esta sucursal está inactiva y no admite operaciones.",
+      );
     (await cookies()).set(MANAGED_BRANCH_COOKIE, String(parsed.data.branchId), {
       httpOnly: true,
       secure: process.env["NODE_ENV"] === "production",

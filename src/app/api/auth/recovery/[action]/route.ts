@@ -2,12 +2,9 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { transportRequest } from "@/lib/api/iam";
 import { clearAuthCookies } from "@/lib/auth/cookies";
-import {
-  TransportForgotPasswordSchema,
-  TransportResetPasswordSchema,
-  TransportUserSchema,
-} from "@/lib/validators/auth";
+import { TransportForgotPasswordSchema, TransportResetPasswordSchema } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
+import { applicationErrorResponse } from "@/lib/api/responses";
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ action: string }> },
@@ -31,11 +28,13 @@ export async function POST(
           { detail: "Ingresa un correo electrónico válido." },
           { status: 400 },
         );
-      try {
-        await transportRequest("auth/forgot-password", { body: parsed.data });
-      } catch (error) {
-        if (!(error instanceof ApplicationError && error.status === 404)) throw error;
-      }
+      const result = await transportRequest("auth/forgot-password", { body: parsed.data });
+      if (result !== null)
+        throw new ApplicationError(
+          "system.internal_error",
+          502,
+          "No se pudo confirmar la solicitud de recuperación.",
+        );
       return NextResponse.json({
         status: "sent",
         detail:
@@ -49,18 +48,22 @@ export async function POST(
         { status: 400 },
       );
     const { token, password, confirmPassword } = parsed.data;
-    TransportUserSchema.parse(
-      await transportRequest("users/reset-password", {
-        token,
-        body: { password, confirmPassword },
-      }),
-    );
+    const result = await transportRequest("users/reset-password", {
+      body: { token, password, confirmPassword },
+    });
+    if (result !== null)
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "No se pudo confirmar el cambio. Intenta iniciar sesión antes de repetirlo.",
+      );
     await clearAuthCookies();
     return NextResponse.json({
       status: "reset",
       detail: "Contraseña actualizada. Inicia sesión con tu nueva contraseña.",
     });
   } catch (error) {
+    if (error instanceof ApplicationError) return applicationErrorResponse(error);
     return NextResponse.json(
       {
         detail:

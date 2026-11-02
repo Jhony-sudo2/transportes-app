@@ -14,6 +14,7 @@ import {
   driverPhotoError,
 } from "@/lib/validators/fleet-resources";
 import { ApplicationError } from "@/types/error";
+import type { DriverCreateRequest } from "@/types/fleet";
 export async function POST(request: NextRequest) {
   try {
     if (request.headers.get("origin") !== request.nextUrl.origin)
@@ -65,9 +66,28 @@ export async function POST(request: NextRequest) {
       );
     const { token, branchId } = await requireSelectedBranch(parsed.data.branchId, workspace);
     const upstream = new FormData();
+    const data = parsed.data;
+    const driverRequest: DriverCreateRequest = {
+      person: {
+        name: data.name,
+        lastName: data.lastName,
+        email: data.email,
+        nit: data.nit,
+        dpi: data.dpi,
+        address: data.adress,
+      },
+      branchId,
+      phone: data.phone,
+      baseSalary: data.baseSalary,
+      license: {
+        number: data.license.number,
+        licenseType: data.license.licenseType,
+        expirationDate: data.license.expirationDate,
+      },
+    };
     upstream.append(
       "request",
-      new Blob([JSON.stringify({ ...parsed.data, branchId })], { type: "application/json" }),
+      new Blob([JSON.stringify(driverRequest)], { type: "application/json" }),
       "request.json",
     );
     upstream.append("photo", photo, photo.type === "image/png" ? "photo.png" : "photo.jpg");

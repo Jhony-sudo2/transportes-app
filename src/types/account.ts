@@ -26,6 +26,10 @@ export interface AccountPasswordRequest {
   password: string;
   confirmPassword: string;
 }
+export interface AccountTwoFactorRequest {
+  twoFactorEnabled: boolean;
+  currentPassword: string;
+}
 export interface AccountProfileOperation extends Omit<DriverOperation, "action"> {
   action: "UPDATE";
 }

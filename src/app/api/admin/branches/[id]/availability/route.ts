@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAccess, adminErrorResponse } from "@/lib/api/admin";
 import { fleetRequest } from "@/lib/api/fleet";
-import { BranchSchema } from "@/lib/validators/branch";
+import { BranchStatusResponseSchema } from "@/lib/validators/branch";
 import { ManagedBranchIdSchema } from "@/lib/validators/branch-context";
 import { ApplicationError } from "@/types/error";
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -21,7 +21,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         400,
         "Indica una sucursal y un estado válidos.",
       );
-    const item = BranchSchema.safeParse(
+    const item = BranchStatusResponseSchema.safeParse(
       await fleetRequest(`branches/${id.data}`, token, body.data, "PATCH"),
     );
     if (!item.success || item.data.id !== id.data || item.data.active !== body.data.active)

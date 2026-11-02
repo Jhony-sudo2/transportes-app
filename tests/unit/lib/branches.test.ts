@@ -30,6 +30,7 @@ const input = {
 };
 const saved = {
   id: 2,
+  active: false,
   name: input.name,
   phone: input.phone,
   latitude: input.direction.latitude,
@@ -177,7 +178,7 @@ describe("Sucursales y coordenadas decimales", () => {
     expect(await result.json()).toEqual(saved);
     const [url, options] = mocks.fetch.mock.calls[0] ?? [];
     expect(url).toMatch(/\/api\/v1\/branches\/2$/);
-    expect(options.method).toBe("PUT");
+    expect(options.method).toBe("PATCH");
     expect(options.headers.Authorization).toBe("Bearer private-token");
     expect(JSON.parse(options.body)).toEqual(input);
   });

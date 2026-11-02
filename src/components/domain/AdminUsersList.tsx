@@ -37,14 +37,16 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
       header: "Nombre",
       render: (_value, user) => (
         <span className="block min-w-36 font-medium">
-          {user.name} {user.lastName}
+          {[user.name, user.lastName].filter(Boolean).join(" ") || `Usuario #${user.id}`}
         </span>
       ),
     },
     {
       key: "email",
       header: "Correo",
-      render: (_value, user) => <span className="whitespace-nowrap">{user.email}</span>,
+      render: (_value, user) => (
+        <span className="whitespace-nowrap">{user.email || "No informado por el servicio"}</span>
+      ),
     },
     {
       key: "role",
@@ -67,7 +69,7 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
               setNotice("");
               setStatusTarget(user);
             }}
-            aria-label={`${user.isActive ? "Desactivar" : "Activar"} usuario ${user.email}`}
+            aria-label={`${user.isActive ? "Desactivar" : "Activar"} usuario ${user.email || `#${user.id}`}`}
           >
             {user.isActive ? "Desactivar" : "Activar"}
           </Button>
@@ -83,7 +85,7 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
             variant="outline"
             size="sm"
             onClick={() => setSelected(user)}
-            aria-label={`Gestionar sucursales de ${user.email}`}
+            aria-label={`Gestionar sucursales de ${user.email || `usuario #${user.id}`}`}
           >
             Sucursales ({user.branchIds?.length ?? 0})
           </Button>
@@ -108,6 +110,12 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
           </Link>
         </Button>
       </div>
+      {data?.content.some((user) => !user.email || !user.name) && (
+        <p role="status" className="tg-notice">
+          El servicio de personal aún no informa nombre o correo para algunas cuentas. Puedes
+          identificarlas por su ID, rol y sucursales.
+        </p>
+      )}
       <form
         className="flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--tg-line)] bg-[var(--tg-paper)] p-5"
         onSubmit={(event) => {

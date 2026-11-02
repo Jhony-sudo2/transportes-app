@@ -4,7 +4,7 @@ import { requireAdminAccess, adminRequest, adminErrorResponse } from "@/lib/api/
 import {
   CreateStaffUserSchema,
   StaffCreatedSchema,
-  StaffUsersPageSchema,
+  StaffUserListSchema,
   AdminRoleListSchema,
   isCreatableRole,
   AdminUsersQuerySchema,
@@ -28,26 +28,33 @@ export async function GET(request: NextRequest) {
         400,
         "Revisa el correo y la página solicitada.",
       );
-    const query = new URLSearchParams({
-      page: String(parsed.data.page),
-      size: "10",
-      sortBy: "id",
-      ascending: "false",
-      email: parsed.data.email,
-    });
+    const query = new URLSearchParams();
     if (parsed.data.role) query.set("role", parsed.data.role);
     if (parsed.data.active) query.set("active", parsed.data.active);
     if (parsed.data.branchId) query.set("branchId", String(parsed.data.branchId));
-    const result = StaffUsersPageSchema.safeParse(
-      await adminRequest(`users/staff?${query}`, token),
-    );
-    if (!result.success || result.data.page !== parsed.data.page || result.data.size !== 10)
+    const result = StaffUserListSchema.safeParse(await adminRequest(`users/staff?${query}`, token));
+    if (!result.success)
       throw new ApplicationError(
         "system.internal_error",
         502,
         "El listado de usuarios no tiene el formato esperado.",
       );
-    return NextResponse.json(result.data);
+    if (parsed.data.email && result.data.some((user) => !user.email))
+      throw new ApplicationError(
+        "validation.failed",
+        422,
+        "El servicio de personal aún no informa correos para todas las cuentas. Consulta por rol, sucursal o estado.",
+      );
+    const email = parsed.data.email.toLowerCase();
+    const users = result.data.filter((user) => !email || user.email.toLowerCase().includes(email));
+    const size = 10;
+    return NextResponse.json({
+      content: users.slice(parsed.data.page * size, (parsed.data.page + 1) * size),
+      page: parsed.data.page,
+      size,
+      totalElements: users.length,
+      totalPages: Math.ceil(users.length / size),
+    });
   } catch (error) {
     return adminErrorResponse(error);
   }

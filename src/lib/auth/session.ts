@@ -1,5 +1,5 @@
 import "server-only";
-import { TransportUserSchema } from "@/lib/validators/auth";
+import { TransportProfileResponseSchema as TransportUserSchema } from "@/lib/validators/auth";
 import { transportRequest } from "@/lib/api/iam";
 import { ApplicationError } from "@/types/error";
 
@@ -52,8 +52,7 @@ export async function getTransportSession() {
     const user = TransportUserSchema.parse(await transportRequest("users/profile", { token }));
     return user.isActive ? user : null;
   } catch (error) {
-    if (error instanceof ApplicationError && (error.status === 401 || error.status === 403))
-      return null;
+    if (error instanceof ApplicationError && error.status === 401) return null;
     throw error;
   }
 }

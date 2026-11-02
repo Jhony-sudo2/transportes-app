@@ -42,8 +42,8 @@ export interface StaffCreatedResponse {
   branchIds: number[];
 }
 export interface StaffUserResponse extends StaffCreatedResponse {
-  name: string;
-  lastName: string;
-  email: string;
+  name?: string | null | undefined;
+  lastName?: string | null | undefined;
+  email?: string | null | undefined;
   active: boolean;
 }

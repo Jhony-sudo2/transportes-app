@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAccountAccess, accountIamRequest } from "@/lib/api/account";
 import { adminErrorResponse } from "@/lib/api/admin";
 import { validatedFleetResult } from "@/lib/api/branch-workspace";
-import { AccountTwoFactorSchema } from "@/lib/validators/account";
-import { TransportUserSchema } from "@/lib/validators/auth";
+import { AccountTwoFactorRequestSchema } from "@/lib/validators/account";
+import { TransportProfileResponseSchema as TransportUserSchema } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
 
 export async function GET() {
@@ -25,21 +25,29 @@ export async function PATCH(request: NextRequest) {
     } catch {
       throw new ApplicationError("validation.failed", 400, "Solicitud JSON inválida.");
     }
-    const parsed = AccountTwoFactorSchema.safeParse(raw);
+    const parsed = AccountTwoFactorRequestSchema.safeParse(raw);
     if (!parsed.success)
       throw new ApplicationError(
         "validation.failed",
         400,
-        "Indica si deseas activar o desactivar el 2FA.",
+        "Indica el estado de 2FA y tu contraseña actual.",
       );
-    // El endpoint de User alterna el estado. Si ya coincide, no lo invocamos.
+    // Explicit desired state; never toggle by sending an empty request.
     if (user.twoFactorEnabled === parsed.data.twoFactorEnabled)
       return NextResponse.json({ twoFactorEnabled: user.twoFactorEnabled });
     const unconfirmed =
       "No se pudo confirmar el cambio de 2FA. Consulta su estado antes de volver a intentarlo.";
     const updated = validatedFleetResult(
       TransportUserSchema,
-      await accountIamRequest("users/profile/two-factor", token, undefined, "PATCH"),
+      await accountIamRequest(
+        "users/profile/two-factor",
+        token,
+        {
+          currentPassword: parsed.data.currentPassword,
+          enabled: parsed.data.twoFactorEnabled,
+        },
+        "PATCH",
+      ),
       unconfirmed,
     );
     if (

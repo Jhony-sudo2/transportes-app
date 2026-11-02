@@ -193,7 +193,24 @@ describe("Alta de buses y choferes por sucursal", () => {
     expect(options.headers.Authorization).toBe("Bearer private-token");
     expect(options.headers["Content-Type"]).toBeUndefined();
     expect(options.body).toBeInstanceOf(FormData);
-    expect(JSON.parse(await options.body.get("request").text())).toEqual(driverInput);
+    expect(JSON.parse(await options.body.get("request").text())).toEqual({
+      person: {
+        name: driverInput.name,
+        lastName: driverInput.lastName,
+        email: driverInput.email,
+        nit: driverInput.nit,
+        dpi: driverInput.dpi,
+        address: driverInput.adress,
+      },
+      branchId: driverInput.branchId,
+      phone: driverInput.phone,
+      baseSalary: driverInput.baseSalary,
+      license: {
+        number: driverInput.license.number,
+        licenseType: driverInput.license.licenseType,
+        expirationDate: driverInput.license.expirationDate,
+      },
+    });
     expect(options.body.get("request").type).toBe("application/json");
     expect(options.body.get("photo").size).toBe(12);
   });

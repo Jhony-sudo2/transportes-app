@@ -20,7 +20,7 @@ import {
 
 // All traffic goes through the API Gateway at :8080, which load-balances to lb://iam-service.
 // The gateway strips nothing — paths passed here must include the /api/v1 prefix.
-const GATEWAY = process.env["GATEWAY_URL"] ?? "http://localhost:8080";
+const GATEWAY = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/+$/, "");
 const BASE = `${GATEWAY}/api/v1`;
 
 // --- Auth ---

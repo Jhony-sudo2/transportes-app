@@ -56,15 +56,15 @@ export const StaffCreatedSchema = z.object({
   branchIds: z.array(ManagedBranchIdSchema),
 }) satisfies z.ZodType<StaffCreatedResponse, z.ZodTypeDef, unknown>;
 export const StaffUserSchema = StaffCreatedSchema.extend({
-  name: z.string(),
-  lastName: z.string(),
-  email: z.string().email(),
+  name: z.string().nullish(),
+  lastName: z.string().nullish(),
+  email: z.string().email().nullish(),
   active: z.boolean(),
 }).transform((user) => ({
   id: user.userId,
-  name: user.name,
-  lastName: user.lastName,
-  email: user.email,
+  name: user.name ?? "",
+  lastName: user.lastName ?? "",
+  email: user.email ?? "",
   isActive: user.active,
   branchIds: user.branchIds,
   role: { id: roleIds[user.role], name: user.role === "CASHIER" ? ("CAJERO" as const) : user.role },
@@ -77,6 +77,7 @@ export const CreatedAdminUserSchema = TransportUserSchema.pick({
   role: true,
 });
 export const AdminUserSchema = CreatedAdminUserSchema.extend({
+  email: z.union([z.string().email(), z.literal("")]),
   isActive: z.boolean(),
   branchIds: z.array(ManagedBranchIdSchema).nullish(),
 });
@@ -98,6 +99,7 @@ export const StaffUserResultSchema = z.union([StaffUserSchema, AdminUserSchema])
 export const StaffUsersPageSchema = AdminUsersPageSchema.extend({
   content: z.array(StaffUserResultSchema),
 });
+export const StaffUserListSchema = z.array(StaffUserSchema);
 export const AssignAdminBranchSchema = z.object({ branchId: ManagedBranchIdSchema }).strict();
 export const AdminBranchIdsSchema = z.array(ManagedBranchIdSchema);
 export const AdminUserAvailabilitySchema = z.object({ isActive: z.boolean() }).strict();

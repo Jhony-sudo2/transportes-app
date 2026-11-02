@@ -2,7 +2,12 @@ import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess, adminErrorResponse } from "@/lib/api/admin";
 import { fleetRequest } from "@/lib/api/fleet";
-import { BranchListSchema, BranchSchema, CreateBranchSchema } from "@/lib/validators/branch";
+import {
+  BranchListSchema,
+  BranchSchema,
+  BranchStatusResponseSchema,
+  CreateBranchSchema,
+} from "@/lib/validators/branch";
 import { ApplicationError } from "@/types/error";
 export async function GET() {
   try {
@@ -36,8 +41,22 @@ export async function POST(request: NextRequest) {
         { detail: parsed.error.issues.map((issue) => issue.message).join(" ") },
         { status: 400 },
       );
-    const response = BranchSchema.safeParse(await fleetRequest("branches", token, parsed.data));
+    const rawResponse = await fleetRequest("branches", token, parsed.data);
+    const identity = BranchStatusResponseSchema.safeParse(rawResponse);
+    if (!identity.success || identity.data.active !== false)
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "No se pudo confirmar el alta de una sucursal inactiva. Actualiza el listado antes de repetirla.",
+      );
+    let response = BranchSchema.safeParse(rawResponse);
     if (!response.success)
+      response = BranchSchema.safeParse(await fleetRequest(`branches/${identity.data.id}`, token));
+    if (
+      !response.success ||
+      response.data.id !== identity.data.id ||
+      response.data.active !== false
+    )
       throw new ApplicationError(
         "system.internal_error",
         502,

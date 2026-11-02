@@ -41,7 +41,7 @@ describe("Contexto del administrador de sucursales", () => {
     );
     mocks.fleet.mockImplementation(async (path: string) => {
       const id = Number(path.split("/")[1]);
-      return { id, name: id === 2 ? "Sede Central" : "Antigua", phone: "No exponer" };
+      return { id, name: id === 2 ? "Sede Central" : "Antigua", phone: "No exponer", active: true };
     });
   });
   it("consulta solo las sucursales asignadas y devuelve id y nombre", async () => {
@@ -101,7 +101,7 @@ describe("Contexto del administrador de sucursales", () => {
       "7",
       expect.objectContaining({ httpOnly: true, sameSite: "lax", path: "/" }),
     );
-    expect(mocks.fleet).not.toHaveBeenCalled();
+    expect(mocks.fleet).toHaveBeenCalledWith("branches/7", "private-token");
   });
   it("no guarda sucursales ajenas ni datos invalidos", async () => {
     expect((await PUT(request({ branchId: 999 }))).status).toBe(403);

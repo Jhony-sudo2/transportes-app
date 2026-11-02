@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { readFleetResponse } from "@/lib/fleet-ui";
-import { BranchSchema } from "@/lib/validators/branch";
+import { BranchStatusResponseSchema } from "@/lib/validators/branch";
 import type { Branch } from "@/types/branch";
 export function BranchAvailabilityButton({
   branch,
@@ -39,7 +39,7 @@ export function BranchAvailabilityButton({
     sending.current = true;
     setBusy(true);
     try {
-      const item = BranchSchema.parse(
+      const item = BranchStatusResponseSchema.parse(
         await readFleetResponse(
           await fetch(`/api/admin/branches/${branch.id}/availability`, {
             method: "PATCH",

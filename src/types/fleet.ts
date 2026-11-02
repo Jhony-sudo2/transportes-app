@@ -58,6 +58,20 @@ export interface DriverFormData {
   baseSalary: number;
   license: DriverLicense;
 }
+export interface DriverCreateRequest {
+  person: {
+    name: string;
+    lastName: string;
+    email: string;
+    nit: string;
+    dpi: string;
+    address: string;
+  };
+  branchId: number;
+  phone: string;
+  baseSalary: number;
+  license: DriverLicense;
+}
 export interface CreatedDriver {
   id: number;
   name: string;

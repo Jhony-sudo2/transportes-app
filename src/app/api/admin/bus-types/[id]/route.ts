@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess, adminErrorResponse } from "@/lib/api/admin";
 import { fleetRequest } from "@/lib/api/fleet";
 import { validatedFleetResult } from "@/lib/api/branch-workspace";
-import { BusTypeInputSchema, BusTypeSchema } from "@/lib/validators/bus-type";
+import {
+  BusTypeInputSchema,
+  BusTypeResponseSchema as BusTypeSchema,
+} from "@/lib/validators/bus-type";
 import { ManagedBranchIdSchema } from "@/lib/validators/branch-context";
 import { ApplicationError } from "@/types/error";
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {

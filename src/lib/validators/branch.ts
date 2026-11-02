@@ -13,7 +13,7 @@ export const LongitudeSchema = z
 export const CoordinateSchema = z.object({ latitude: LatitudeSchema, longitude: LongitudeSchema });
 const text = z.string().trim().min(1, "Este campo es obligatorio");
 export const CreateBranchSchema = z.object({
-  name: text.max(255),
+  name: text.max(150),
   phone: text.max(20),
   direction: z.object({
     municipalityId: z
@@ -26,7 +26,7 @@ export const CreateBranchSchema = z.object({
   }),
 });
 export const UpdateBranchSchema = CreateBranchSchema;
-export const BranchSchema = z.object({
+const BranchRecordSchema = z.object({
   id: z.number().int().positive(),
   name: z.string(),
   phone: z.string().nullish(),
@@ -39,7 +39,20 @@ export const BranchSchema = z.object({
   indication: z.string().nullish(),
   active: z.boolean().optional(),
 });
+export const BranchSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || !("branchId" in raw)) return raw;
+  if ("id" in raw && raw.id !== raw.branchId) return null;
+  return { ...raw, id: raw.branchId };
+}, BranchRecordSchema);
 export const BranchListSchema = z.array(BranchSchema);
+export const BranchStatusResponseSchema = z.preprocess(
+  (raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || !("branchId" in raw)) return raw;
+    if ("id" in raw && raw.id !== raw.branchId) return null;
+    return { ...raw, id: raw.branchId };
+  },
+  z.object({ id: z.number().int().positive().safe(), active: z.boolean() }).strip(),
+);
 export const LocationListSchema = z.array(
   z.object({ id: z.number().int().positive(), name: z.string() }),
 );

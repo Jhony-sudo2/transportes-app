@@ -29,6 +29,7 @@ const fields = {
   active: true,
 };
 const type = { id: 1, ...fields };
+const wireType = { busTypeId: 1, ...fields };
 const context = (id = "1") => ({ params: Promise.resolve({ id }) });
 function request(body: unknown = fields, origin = "http://localhost:3000") {
   return new NextRequest("http://localhost:3000/api/admin/bus-types", {
@@ -53,12 +54,12 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
   it("consulta catálogo completo de administrador", async () => {
-    mocks.fetch.mockResolvedValueOnce(Response.json([type]));
+    mocks.fetch.mockResolvedValueOnce(Response.json([wireType]));
     expect(await (await catalog()).json()).toEqual([type]);
     expect(mocks.fetch.mock.calls[0]?.[0]).toMatch(/\/api\/v1\/bus-types$/);
   });
   it("registra capacidad y tarifas por tipo sin cálculos de costo en la SPA", async () => {
-    mocks.fetch.mockResolvedValueOnce(Response.json(type, { status: 201 }));
+    mocks.fetch.mockResolvedValueOnce(Response.json(wireType, { status: 201 }));
     expect((await create(request())).status).toBe(201);
     const options = mocks.fetch.mock.calls[0]?.[1];
     expect(options.method).toBe("POST");
@@ -66,7 +67,7 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
     expect(options.headers.Authorization).toBe("Bearer private-token");
   });
   it("actualiza el tipo mediante PATCH y verifica los campos devueltos", async () => {
-    mocks.fetch.mockResolvedValueOnce(Response.json({ ...type, active: false }));
+    mocks.fetch.mockResolvedValueOnce(Response.json({ ...wireType, active: false }));
     expect((await edit(request({ ...fields, active: false }), context())).status).toBe(200);
     expect(mocks.fetch.mock.calls[0]?.[1].method).toBe("PATCH");
   });
@@ -81,7 +82,7 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
   );
   it("permite consulta del catálogo al administrador de sucursal sin darle escritura", async () => {
     mocks.session.mockResolvedValue({ ...user, role: { id: 3, name: "SUCURSAL_ADMIN" } });
-    mocks.fetch.mockResolvedValueOnce(Response.json([type]));
+    mocks.fetch.mockResolvedValueOnce(Response.json([wireType]));
     expect(await (await branchCatalog()).json()).toEqual([type]);
   });
   it.each(["ADMIN", "CUSTOMER", "CAJERO", "DRIVER"])(
@@ -113,7 +114,7 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
       depreciationPerKm: 0,
       suggestedDriverSalaryPerTrip: 0,
     };
-    mocks.fetch.mockResolvedValueOnce(Response.json({ id: 1, ...zero }));
+    mocks.fetch.mockResolvedValueOnce(Response.json({ busTypeId: 1, ...zero }));
     expect((await create(request(zero))).status).toBe(201);
   });
   it("conserva el rechazo de capacidad en uso sin reenviar", async () => {
@@ -156,7 +157,7 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
   it("resuelve la capacidad contractual del tipo en lugar de multiplicar filas y columnas", async () => {
-    mocks.fetch.mockResolvedValueOnce(Response.json([type]));
+    mocks.fetch.mockResolvedValueOnce(Response.json([wireType]));
     expect((await getBusTypeForUnit("token", 1, 12, 4)).capacity).toBe(40);
   });
   it.each([
@@ -164,11 +165,11 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
     { id: 1, rows: 1, active: true },
     { id: 1, rows: 12, active: false },
   ])("rechaza tipo o distribución incompatible %j", async ({ id, rows, active }) => {
-    mocks.fetch.mockResolvedValueOnce(Response.json([{ ...type, active }]));
+    mocks.fetch.mockResolvedValueOnce(Response.json([{ ...wireType, active }]));
     await expect(getBusTypeForUnit("token", id, rows, 4)).rejects.toMatchObject({ status: 422 });
   });
   it("conserva un tipo inactivo ya asignado al editar", async () => {
-    mocks.fetch.mockResolvedValueOnce(Response.json([{ ...type, active: false }]));
+    mocks.fetch.mockResolvedValueOnce(Response.json([{ ...wireType, active: false }]));
     expect((await getBusTypeForUnit("token", 1, 12, 4, 1)).active).toBe(false);
   });
   it("solicita habilitación de sucursal sin inventar responsables", async () => {

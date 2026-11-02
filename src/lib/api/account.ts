@@ -5,6 +5,7 @@ import { fleetRequest } from "@/lib/api/fleet";
 import { validatedFleetResult } from "@/lib/api/branch-workspace";
 import { AccountDriverSchema, AccountProfileSchema } from "@/lib/validators/account";
 import { ApplicationError } from "@/types/error";
+import { readUpstreamProblem } from "./responses";
 
 export async function requireAccountAccess() {
   const user = await getTransportSession();
@@ -30,18 +31,7 @@ export async function getOwnDriver(access: Awaited<ReturnType<typeof requireAcco
       403,
       "Esta operación corresponde al perfil de chofer.",
     );
-  let raw: unknown;
-  try {
-    raw = await fleetRequest("drivers/me", access.token);
-  } catch (error) {
-    if (error instanceof ApplicationError && error.status === 401)
-      throw new ApplicationError(
-        "system.internal_error",
-        502,
-        "No se pudo validar tu perfil de chofer en Fleet. Inténtalo nuevamente.",
-      );
-    throw error;
-  }
+  const raw = await fleetRequest("drivers/me", access.token);
   const driver = validatedFleetResult(
     AccountDriverSchema,
     raw,
@@ -84,28 +74,18 @@ export async function accountIamRequest(
     );
   }
   if (!response.ok) {
-    let message =
+    const message =
       response.status === 401
         ? "Tu sesión ha vencido. Inicia sesión nuevamente."
         : response.status === 409
           ? "El correo o NIT ya pertenece a otra cuenta."
           : "No se pudo guardar el cambio de tu cuenta.";
-    if (response.status === 400 || response.status === 409) {
-      try {
-        const problem: unknown = await response.json();
-        if (problem && typeof problem === "object") {
-          const detail =
-            "detail" in problem ? problem.detail : "message" in problem ? problem.message : null;
-          if (typeof detail === "string" && detail.trim()) message = detail.slice(0, 1000);
-        }
-      } catch {
-        /* Conserva el mensaje general. */
-      }
-    }
+    const problem = await readUpstreamProblem(response, message);
     throw new ApplicationError(
       response.status === 409 ? "resource.conflict" : "system.internal_error",
       response.status,
-      message,
+      problem.detail,
+      problem.upstream,
     );
   }
   if (response.status === 204) return null;

@@ -8,9 +8,11 @@ const integer = z
   .max(2147483647);
 export const BusFormSchema = z.object({
   branchId: ManagedBranchIdSchema,
-  plateNumber: required.max(255),
-  brand: required.max(255),
-  color: required.max(255),
+  plateNumber: required
+    .max(32)
+    .regex(/^[A-Za-z0-9-]+$/, "Usa letras, números o guiones en la placa"),
+  brand: required.max(100),
+  color: required.max(80),
   model: required.max(100),
   year_manufacture: integer.max(9999),
   seatRows: integer.max(30, "Se permiten hasta 30 filas"),
@@ -78,19 +80,21 @@ const localDate = z
   }, "Ingresa una fecha válida");
 export const CreateDriverSchema = z.object({
   branchId: ManagedBranchIdSchema,
-  name: required.max(255),
-  lastName: required.max(255),
-  dpi: required.max(50),
+  name: required.max(150),
+  lastName: required.max(150),
+  dpi: required.max(32),
   nit: required.max(50),
-  phone: required.max(20),
-  email: z.string().trim().email("Ingresa un correo válido").max(255),
+  phone: required.max(32).regex(/^[+0-9() -]{7,32}$/, "Ingresa un teléfono válido"),
+  email: z.string().trim().email("Ingresa un correo válido").max(254),
   adress: required.max(100),
   baseSalary: z
     .number({ invalid_type_error: "Ingresa un salario válido" })
     .finite()
-    .nonnegative("El salario no puede ser negativo"),
+    .nonnegative("El salario no puede ser negativo")
+    .max(999999999999.99)
+    .refine((value) => Number(value.toFixed(2)) === value, "Usa hasta dos decimales"),
   license: z.object({
-    number: required.max(255),
+    number: required.max(80),
     expirationDate: localDate,
     licenseType: ManagedBranchIdSchema,
   }),
@@ -142,7 +146,7 @@ export const DriverListRecordSchema = CreatedDriverSchema.innerType().extend({
   phone: z.string().nullish(),
   baseSalary: z.number().finite().nonnegative().nullish(),
   number: z.string().nullish(),
-  expirationDate: z.string().nullish(),
+  expirationDate: localDate.nullish(),
   licenseTypeName: z.string().nullish(),
   licenseId: ManagedBranchIdSchema.nullish(),
   licenseTypeId: ManagedBranchIdSchema.nullish(),

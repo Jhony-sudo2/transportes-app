@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getBranchWorkspace, validatedFleetResult } from "@/lib/api/branch-workspace";
 import { fleetRequest } from "@/lib/api/fleet";
-import { ManagedBranchChoiceSchema } from "@/lib/validators/branch-context";
+import { OperationalBranchSchema } from "@/lib/validators/branch-context";
 import { DriverOperationReferenceSchema } from "@/lib/validators/fleet-resources";
 import { ApplicationError } from "@/types/error";
 import { CreateBusForm } from "./CreateBusForm";
@@ -34,7 +34,7 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
     let branch = null;
     if (branchId !== null) {
       branch = validatedFleetResult(
-        ManagedBranchChoiceSchema,
+        OperationalBranchSchema,
         await fleetRequest(`branches/${branchId}`, token),
       );
       if (branch.id !== branchId)
@@ -43,6 +43,7 @@ export async function FleetCreatePage({ kind, view = "create", searchParams }: P
           502,
           "No se pudo confirmar la sucursal seleccionada.",
         );
+      if (!branch.active) branch = null;
     }
     const query = searchParams ? await searchParams : {};
     const reference = DriverOperationReferenceSchema.safeParse({

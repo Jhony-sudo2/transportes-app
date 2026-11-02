@@ -18,6 +18,15 @@ const user = {
   branchIds: [2],
 };
 const page = { content: [user], page: 0, size: 10, totalElements: 1, totalPages: 1 };
+const staff = {
+  userId: user.id,
+  name: user.name,
+  lastName: user.lastName,
+  email: user.email,
+  role: "SUCURSAL_ADMIN",
+  active: true,
+  branchIds: [2],
+};
 const context = (id = "9") => ({ params: Promise.resolve({ id }) });
 const request = (query = "") => new NextRequest("http://localhost:3000/api/admin/users" + query);
 const branchRequest = () => new NextRequest("http://localhost:3000/api/admin/users/9/branches");
@@ -36,30 +45,33 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
     mocks.cookie.mockReturnValue({ value: "private-token" });
     mocks.fetch.mockImplementation(async (url: string, options: RequestInit) => {
       if (options.method === "PATCH") return Response.json({ ...user, branchIds: [2, 3] });
-      return Response.json(url.includes("/branches") ? [2] : page);
+      return Response.json(url.includes("/branches") ? [2] : [staff]);
     });
   });
   afterEach(() => vi.unstubAllGlobals());
-  it("consulta una página real con correo escapado y orden fijo", async () => {
-    mocks.fetch.mockResolvedValueOnce(Response.json({ ...page, page: 1 }));
+  it("pagina en el BFF una lista sin enviar filtros no soportados al proveedor", async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json([{ ...staff, email: "ana+ventas@example.com" }]),
+    );
     const response = await list(
       request("?page=1&email=ana%2Bventas%40example.com&size=100&sortBy=password"),
     );
     expect(response.status).toBe(200);
     const [url, options] = mocks.fetch.mock.calls[0]!;
-    expect(Object.fromEntries(new URL(url).searchParams)).toEqual({
-      page: "1",
-      size: "10",
-      sortBy: "id",
-      ascending: "false",
-      email: "ana+ventas@example.com",
+    expect(Object.fromEntries(new URL(url).searchParams)).toEqual({});
+    expect(await response.json()).toEqual({
+      content: [],
+      page: 1,
+      size: 10,
+      totalElements: 1,
+      totalPages: 1,
     });
     expect(options.headers.Authorization).toBe("Bearer private-token");
     expect(options.cache).toBe("no-store");
   });
   it("devuelve los campos necesarios del usuario sin exponer otros datos", async () => {
     mocks.fetch.mockResolvedValueOnce(
-      Response.json({ ...page, content: [{ ...user, dpi: "private", password: "private" }] }),
+      Response.json([{ ...staff, dpi: "private", password: "private" }]),
     );
     expect(await (await list(request())).json()).toEqual(page);
   });
@@ -80,9 +92,7 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
     },
   );
   it("normaliza CASHIER para mostrar su rol", async () => {
-    mocks.fetch.mockResolvedValueOnce(
-      Response.json({ ...page, content: [{ ...user, role: { id: 5, name: "CASHIER" } }] }),
-    );
+    mocks.fetch.mockResolvedValueOnce(Response.json([{ ...staff, role: "CASHIER" }]));
     expect((await (await list(request())).json()).content[0].role.name).toBe("CAJERO");
   });
   it.each(["?page=-1", "?page=abc", "?page=1.5", "?page=2147483648", "?email=" + "x".repeat(256)])(
@@ -94,7 +104,7 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
   );
   it("acepta el listado vacío paginado", async () => {
     const empty = { ...page, content: [], totalElements: 0, totalPages: 0 };
-    mocks.fetch.mockResolvedValueOnce(Response.json(empty));
+    mocks.fetch.mockResolvedValueOnce(Response.json([]));
     expect(await (await list(request())).json()).toEqual(empty);
   });
   it.each([

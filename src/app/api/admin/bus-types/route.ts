@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess, adminErrorResponse } from "@/lib/api/admin";
 import { fleetRequest } from "@/lib/api/fleet";
 import { validatedFleetResult } from "@/lib/api/branch-workspace";
-import { BusTypeInputSchema, BusTypeListSchema, BusTypeSchema } from "@/lib/validators/bus-type";
+import {
+  BusTypeInputSchema,
+  BusTypeListResponseSchema as BusTypeListSchema,
+  BusTypeResponseSchema as BusTypeSchema,
+} from "@/lib/validators/bus-type";
 import { ApplicationError } from "@/types/error";
 export async function GET() {
   try {

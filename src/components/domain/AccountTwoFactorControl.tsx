@@ -18,10 +18,15 @@ export function AccountTwoFactorControl({
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const active = useRef(false);
   useEffect(() => setSelected(enabled), [enabled]);
   async function run(readOnly = false) {
     if (active.current || busy || (!readOnly && (uncertain || selected === enabled))) return;
+    if (!readOnly && !currentPassword) {
+      setError("Ingresa tu contraseña actual para cambiar el 2FA.");
+      return;
+    }
     active.current = true;
     setWorking(true);
     setBusy(true);
@@ -36,7 +41,7 @@ export function AccountTwoFactorControl({
           : {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ twoFactorEnabled: selected }),
+              body: JSON.stringify({ twoFactorEnabled: selected, currentPassword }),
             },
       );
       ambiguous = response.ok || response.status >= 500;
@@ -46,6 +51,7 @@ export function AccountTwoFactorControl({
       setSelected(result.data.twoFactorEnabled);
       onSaved(result.data.twoFactorEnabled);
       setUncertain(false);
+      setCurrentPassword("");
       setNotice(
         readOnly
           ? `Estado consultado: 2FA ${result.data.twoFactorEnabled ? "activado" : "desactivado"}.`
@@ -86,6 +92,19 @@ export function AccountTwoFactorControl({
         Al activarla, recibirás un código por correo para completar cada inicio de sesión. Esta
         preferencia se guarda por separado de tus datos personales.
       </p>
+      <label htmlFor="two-factor-current-password" className="block text-sm font-medium">
+        Contraseña actual para cambiar 2FA
+      </label>
+      <input
+        id="two-factor-current-password"
+        type="password"
+        autoComplete="current-password"
+        maxLength={100}
+        value={currentPassword}
+        disabled={busy || uncertain}
+        onChange={(event) => setCurrentPassword(event.target.value)}
+        className="min-h-11 w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3"
+      />
       {error && (
         <p role="alert" className="break-words text-sm text-red-700 dark:text-red-300">
           {error}

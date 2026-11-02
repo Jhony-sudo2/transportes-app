@@ -358,8 +358,9 @@ describe("Journey: alcance, operación y contratos de la etapa 3", () => {
     expect(mocks.session).not.toHaveBeenCalled();
   });
   it("reduce catálogo público de sucursales a ID y nombre", async () => {
-    responses([{ ...branch, phone: "55555555" }]);
+    responses([{ branchId: branch.id, name: branch.name, phone: "55555555" }]);
     expect(await (await publicBranches()).json()).toEqual([{ id: 2, name: "Central" }]);
+    expect(mocks.fetch.mock.calls[0]?.[0]).toMatch(/branches\/catalog$/);
   });
   it.each([
     "/trips",

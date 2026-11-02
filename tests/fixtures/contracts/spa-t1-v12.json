@@ -1,0 +1,38 @@
+{
+  "provenance": "Synthetic contract examples from ssot_v12 section 05 and read-only DTO inspection. Not captured HTTP responses or runtime evidence.",
+  "profile": {
+    "id": 7,
+    "customerId": 21,
+    "email": "contract@example.com",
+    "emailVerified": true,
+    "role": { "id": 1, "name": "ADMIN" },
+    "isActive": true,
+    "name": "Contract",
+    "lastName": "Example",
+    "nit": "1234567",
+    "phone": "55555555",
+    "dpi": "1234567890123",
+    "address": "Guatemala",
+    "twoFactorEnabled": false,
+    "resetPassword": false,
+    "branchIds": [2]
+  },
+  "staff": [{ "userId": 31, "role": "SUCURSAL_ADMIN", "branchIds": [2], "active": true }],
+  "busType": {
+    "busTypeId": 4,
+    "name": "Contract type",
+    "description": null,
+    "capacity": 40,
+    "fuelEstimatePerKm": 2.1234,
+    "depreciationPerKm": 0.2345,
+    "suggestedDriverSalaryPerTrip": 150.5,
+    "active": true
+  },
+  "catalog": [{ "branchId": 2, "name": "Central" }],
+  "branch": { "branchId": 2, "name": "Central", "active": true },
+  "reset": {
+    "token": "synthetic-opaque-token-not-jwt",
+    "password": "contract-password-123",
+    "confirmPassword": "contract-password-123"
+  }
+}

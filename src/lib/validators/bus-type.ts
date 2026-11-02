@@ -26,5 +26,11 @@ export const BusTypeInputSchema = z
 export const BusTypeSchema = BusTypeInputSchema.extend({
   id: ManagedBranchIdSchema,
   description: z.string().nullish(),
-}) satisfies z.ZodType<BusType, z.ZodTypeDef, unknown>;
+}).strip() satisfies z.ZodType<BusType, z.ZodTypeDef, unknown>;
 export const BusTypeListSchema = z.array(BusTypeSchema);
+// Fleet wire format is distinct from the normalized BFF/UI model.
+export const BusTypeResponseSchema = BusTypeSchema.omit({ id: true })
+  .extend({ busTypeId: ManagedBranchIdSchema })
+  .strip()
+  .transform(({ busTypeId, ...type }) => ({ ...type, id: busTypeId }));
+export const BusTypeListResponseSchema = z.array(BusTypeResponseSchema);

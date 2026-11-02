@@ -136,8 +136,8 @@ describe("Acceso por contrato SSOT, HU-ID-01/02/03", () => {
     },
     credentials: {
       email: credentials.email,
-      password: "password123",
-      confirmPassword: "password123",
+      password: "password12345",
+      confirmPassword: "password12345",
     },
   };
   function request(body: unknown, origin = "http://localhost:3000") {
@@ -274,7 +274,7 @@ describe("Acceso por contrato SSOT, HU-ID-01/02/03", () => {
         phone: "55555555",
         address: "Guatemala",
         email: credentials.email,
-        password: "password123",
+        password: "password12345",
       },
     });
     expect(loginMocks.setCookie).not.toHaveBeenCalled();
@@ -306,19 +306,9 @@ describe("Acceso por contrato SSOT, HU-ID-01/02/03", () => {
 
 describe("Recuperacion de contrasena", () => {
   const body = {
-    token: "header.payload.signature",
-    password: "nueva123",
-    confirmPassword: "nueva123",
-  };
-  const user = {
-    id: 1,
-    email: "ana@example.com",
-    role: { id: 2, name: "CUSTOMER" },
-    isActive: true,
-    name: "Ana",
-    lastName: "Perez",
-    twoFactorEnabled: false,
-    resetPassword: false,
+    token: "opaque_recovery_token",
+    password: "nueva-clave-123",
+    confirmPassword: "nueva-clave-123",
   };
   function request(data: unknown, origin = "http://localhost:3000") {
     return new NextRequest("http://localhost:3000/api/auth/recovery/reset", {
@@ -337,8 +327,8 @@ describe("Recuperacion de contrasena", () => {
     for (const changed of [
       { confirmPassword: "distinta" },
       { password: "12345" },
-      { password: "a".repeat(21) },
-      { token: "1234" },
+      { password: "a".repeat(101) },
+      { token: "" },
     ])
       expect(TransportResetPasswordSchema.safeParse({ ...body, ...changed }).success).toBe(false);
   });
@@ -351,21 +341,19 @@ describe("Recuperacion de contrasena", () => {
       body: { email: "ana@example.com" },
     });
   });
-  it("no revela si una cuenta no existe", async () => {
+  it("no oculta una ruta inexistente como un correo enviado", async () => {
     loginMocks.request.mockRejectedValue(
       new ApplicationError("resource.not_found", 404, "No existe"),
     );
     const response = await recoveryPost(request({ email: "ana@example.com" }), context("forgot"));
-    expect(response.status).toBe(200);
-    expect((await response.json()).status).toBe("sent");
+    expect(response.status).toBe(404);
   });
-  it("envia el token separado del cuerpo y borra la sesion al cambiar clave", async () => {
-    loginMocks.request.mockResolvedValue(user);
+  it("envia el token opaco en el cuerpo, acepta 204 y borra la sesion", async () => {
+    loginMocks.request.mockResolvedValue(null);
     const response = await recoveryPost(request(body), context("reset"));
     expect(response.status).toBe(200);
     expect(loginMocks.request).toHaveBeenCalledWith("users/reset-password", {
-      token: body.token,
-      body: { password: body.password, confirmPassword: body.confirmPassword },
+      body,
     });
     expect(loginMocks.clear).toHaveBeenCalledOnce();
     expect(loginMocks.setCookie).not.toHaveBeenCalled();
@@ -384,12 +372,12 @@ describe("Recuperacion de contrasena", () => {
     expect((await recoveryPost(request({}), context("reset"))).status).toBe(400);
     expect(loginMocks.request).not.toHaveBeenCalled();
   });
-  it("el cliente soporta 204 y transmite el Bearer de recuperacion", async () => {
+  it("el cliente soporta 204 y transmite el token en JSON sin Bearer", async () => {
     const actual = await vi.importActual<typeof import("@/lib/api/iam")>("@/lib/api/iam");
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(Response.json(user));
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
     try {
       expect(
@@ -398,11 +386,10 @@ describe("Recuperacion de contrasena", () => {
         }),
       ).toBeNull();
       await actual.transportRequest("users/reset-password", {
-        token: body.token,
-        body: { password: body.password, confirmPassword: body.confirmPassword },
+        body,
       });
-      expect(fetchMock.mock.calls[1]?.[1].headers.Authorization).toBe(`Bearer ${body.token}`);
-      expect(fetchMock.mock.calls[1]?.[1].body).not.toContain(body.token);
+      expect(fetchMock.mock.calls[1]?.[1].headers.Authorization).toBeUndefined();
+      expect(JSON.parse(fetchMock.mock.calls[1]?.[1].body)).toEqual(body);
     } finally {
       vi.unstubAllGlobals();
     }

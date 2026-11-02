@@ -6,7 +6,7 @@ import {
   TransportAuthRequestSchema,
   TransportLoginResponseSchema,
   TransportAccessResponseSchema,
-  TransportUserSchema,
+  TransportProfileResponseSchema as TransportUserSchema,
 } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
 import { applicationErrorResponse } from "@/lib/api/responses";

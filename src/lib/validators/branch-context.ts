@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BranchSchema } from "./branch";
 
 export const ManagedBranchIdSchema = z.number().int().positive().safe();
 export const ManagedBranchSelectionSchema = z.object({ branchId: ManagedBranchIdSchema });
@@ -6,6 +7,21 @@ export const ManagedBranchChoiceSchema = z.object({
   id: ManagedBranchIdSchema,
   name: z.string().trim().min(1),
 });
+export const OperationalBranchSchema = BranchSchema.pipe(
+  z
+    .object({
+      id: ManagedBranchIdSchema,
+      name: z.string().trim().min(1),
+      active: z.boolean(),
+    })
+    .strip(),
+);
+export const PublicBranchCatalogSchema = z.array(
+  z
+    .object({ branchId: ManagedBranchIdSchema, name: z.string().trim().min(1) })
+    .strip()
+    .transform(({ branchId, name }) => ({ id: branchId, name })),
+);
 export const ManagedBranchContextSchema = z
   .object({
     branches: z.array(ManagedBranchChoiceSchema),

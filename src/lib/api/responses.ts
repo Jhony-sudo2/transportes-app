@@ -12,7 +12,11 @@ export async function readUpstreamProblem(
   try {
     const raw: unknown = await response.json();
     if (raw && typeof raw === "object") {
-      const message = "detail" in raw ? raw.detail : "message" in raw ? raw.message : null;
+      const message = [
+        "detail" in raw ? raw.detail : null,
+        "message" in raw ? raw.message : null,
+        "title" in raw ? raw.title : null,
+      ].find((value) => typeof value === "string" && value.trim());
       if (response.status < 500 && typeof message === "string" && message.trim())
         detail = message.trim().slice(0, 1000);
       if ("code" in raw && typeof raw.code === "string" && raw.code.length <= 128)

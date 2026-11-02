@@ -15,7 +15,7 @@ import {
   AccountDriverSchema,
   AccountProfileSchema,
 } from "@/lib/validators/account";
-import { TransportUserSchema } from "@/lib/validators/auth";
+import { TransportProfileResponseSchema as TransportUserSchema } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
 import { driverPhotoError } from "@/lib/validators/fleet-resources";
 
@@ -125,6 +125,15 @@ export async function PUT(request: NextRequest) {
         { status: 400 },
       );
     const data = parsed.data;
+    if (
+      data.twoFactorEnabled !== undefined &&
+      data.twoFactorEnabled !== access.user.twoFactorEnabled
+    )
+      throw new ApplicationError(
+        "validation.failed",
+        400,
+        "Cambia el 2FA desde su opción específica, confirmando tu contraseña actual.",
+      );
     if (data.nit !== (access.user.nit ?? ""))
       throw new ApplicationError(
         "validation.failed",

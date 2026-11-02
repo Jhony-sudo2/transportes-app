@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,8 +71,25 @@ export default function RegisterPage(): React.ReactElement {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
-  const { register, handleSubmit, getFieldState, formState, reset } =
+  const [prefilledNit, setPrefilledNit] = useState(false);
+  const { register, handleSubmit, getFieldState, formState, reset, setValue } =
     useForm<TransportRegisterRequest>({ resolver: zodResolver(TransportRegisterRequestSchema) });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const single = (key: string) => (params.getAll(key).length === 1 ? params.get(key) : null);
+    const person = TransportRegisterRequestSchema.shape.person.shape;
+    const name = person.name.safeParse(single("name"));
+    const email = TransportRegisterRequestSchema.shape.credentials
+      .innerType()
+      .shape.email.safeParse(single("email"));
+    const nit = person.nit.safeParse(single("nit"));
+    if (name.success) setValue("person.name", name.data);
+    if (email.success) setValue("credentials.email", email.data);
+    if (nit.success) {
+      setValue("person.nit", nit.data);
+      setPrefilledNit(true);
+    }
+  }, [setValue]);
   async function onSubmit(data: TransportRegisterRequest): Promise<void> {
     if (sending.current) return;
     sending.current = true;
@@ -148,6 +165,7 @@ export default function RegisterPage(): React.ReactElement {
                         maxLength={field.maxLength}
                         disabled={busy}
                         required
+                        readOnly={field.name === "person.nit" && prefilledNit}
                         aria-invalid={!!error}
                         aria-describedby={
                           error
@@ -164,7 +182,7 @@ export default function RegisterPage(): React.ReactElement {
                           id="password-hint"
                           className="text-xs text-[var(--color-text-secondary)]"
                         >
-                          Entre 8 y 100 caracteres.
+                          Entre 12 y 100 caracteres.
                         </p>
                       )}
                       {error && (

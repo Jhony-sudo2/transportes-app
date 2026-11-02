@@ -25,6 +25,7 @@ export interface TransportRole {
 export interface TransportUser {
   id: number;
   email: string;
+  emailVerified?: boolean | undefined;
   role: TransportRole;
   isActive: boolean;
   name: string;

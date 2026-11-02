@@ -1,7 +1,7 @@
 import "server-only";
 import { fleetRequest } from "./fleet";
 import { validatedFleetResult } from "./branch-workspace";
-import { BusTypeListSchema } from "@/lib/validators/bus-type";
+import { BusTypeListResponseSchema as BusTypeListSchema } from "@/lib/validators/bus-type";
 import { ApplicationError } from "@/types/error";
 export async function getBusTypeForUnit(
   token: string,

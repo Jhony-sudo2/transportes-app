@@ -138,8 +138,8 @@ export function PasswordSetupForm({ mode }: { mode: "first-login" | "recovery" }
         <>
           <p className="tg-card-description">
             {firstLogin
-              ? "Este será tu acceso a la plataforma. Elige una contraseña de 6 a 20 caracteres y confírmala."
-              : "Elige una contraseña de 6 a 20 caracteres."}
+              ? "Este será tu acceso a la plataforma. Elige una contraseña de 12 a 100 caracteres y confírmala."
+              : "Elige una contraseña de 12 a 100 caracteres."}
           </p>
           {linkError && (
             <p role="alert" className="tg-notice">
@@ -179,7 +179,7 @@ export function PasswordSetupForm({ mode }: { mode: "first-login" | "recovery" }
                 id="new-password"
                 type="password"
                 autoComplete="new-password"
-                maxLength={20}
+                maxLength={100}
                 disabled={busy}
                 aria-invalid={!!errors.password}
                 aria-describedby={errors.password ? "new-password-error" : undefined}
@@ -197,7 +197,7 @@ export function PasswordSetupForm({ mode }: { mode: "first-login" | "recovery" }
                 id="confirm-password"
                 type="password"
                 autoComplete="new-password"
-                maxLength={20}
+                maxLength={100}
                 disabled={busy}
                 aria-invalid={!!errors.confirmPassword}
                 aria-describedby={errors.confirmPassword ? "confirm-password-error" : undefined}

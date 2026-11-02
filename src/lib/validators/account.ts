@@ -8,6 +8,12 @@ import {
 
 const required = z.string().trim().min(1, "Este campo es obligatorio");
 export const AccountTwoFactorSchema = z.object({ twoFactorEnabled: z.boolean() }).strict();
+export const AccountTwoFactorRequestSchema = z
+  .object({
+    twoFactorEnabled: z.boolean(),
+    currentPassword: z.string().min(1, "Ingresa tu contraseña actual").max(100),
+  })
+  .strict();
 export const AccountProfileRequestSchema = z
   .object({
     name: required.max(255),

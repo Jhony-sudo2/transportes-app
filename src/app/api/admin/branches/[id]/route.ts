@@ -55,7 +55,7 @@ export async function PUT(request: NextRequest, context: Context) {
         { detail: parsed.error.issues.map((issue) => issue.message).join(" ") },
         { status: 400 },
       );
-    const updated = await fleetRequest(`branches/${id}`, token, parsed.data, "PUT");
+    const updated = await fleetRequest(`branches/${id}`, token, parsed.data, "PATCH");
     return NextResponse.json(checkedBranch(updated, id));
   } catch (error) {
     return adminErrorResponse(error);
