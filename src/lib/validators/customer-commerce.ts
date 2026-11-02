@@ -3,7 +3,7 @@ export const CommerceIdSchema = z.number().int().positive().safe();
 const money = z.number().finite().nonnegative();
 const dateTime = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?$/, "Fecha inválida");
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})?$/, "Fecha inválida");
 export const CustomerWalletSchema = z.object({ id: CommerceIdSchema, amount: money });
 export const CustomerTransactionSchema = z.object({
   id: CommerceIdSchema,

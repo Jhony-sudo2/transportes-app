@@ -1,7 +1,6 @@
 import { POST as recoveryPost } from "@/app/api/auth/recovery/[action]/route";
 import { TransportResetPasswordSchema } from "@/lib/validators/auth";
 import { POST as registerPost } from "@/app/api/users/register/route";
-import { TransportRegisterRequestSchema } from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -108,102 +107,17 @@ describe("RegisterRequestSchema", () => {
   });
 });
 
-describe("Contratos de login de Transportes Guatemala", () => {
-  it("acepta credenciales y código de segundo factor", () => {
-    expect(
-      TransportLoginRequestSchema.safeParse({
-        email: "cliente@example.com",
-        password: "secreto",
-        code: "1234",
-      }).success,
-    ).toBe(true);
-  });
-  it("rechaza código vac?o y contraseña fuera del l?mite del backend", () => {
-    expect(
-      TransportLoginRequestSchema.safeParse({
-        email: "cliente@example.com",
-        password: "secreto",
-        code: "",
-      }).success,
-    ).toBe(false);
-    expect(
-      TransportLoginRequestSchema.safeParse({
-        email: "cliente@example.com",
-        password: "a".repeat(101),
-      }).success,
-    ).toBe(false);
-  });
-  it("admite desaf?o sin token y cambio obligatorio de contraseña", () => {
-    expect(
-      TransportLoginResponseSchema.safeParse({
-        twoFactorEnabled: true,
-        user: null,
-        jwtToken: null,
-        resetPassword: false,
-      }).success,
-    ).toBe(true);
-    expect(
-      TransportLoginResponseSchema.safeParse({
-        twoFactorEnabled: null,
-        user: null,
-        jwtToken: null,
-        resetPassword: true,
-      }).success,
-    ).toBe(true);
-  });
-  it("acepta IDs numéricos y roles reales del servicio", () => {
-    const user = {
-      id: 1,
-      email: "cliente@example.com",
-      role: { id: 2, name: "CUSTOMER" },
-      isActive: true,
-      name: "Ana",
-      lastName: "Pérez",
-      twoFactorEnabled: false,
-      resetPassword: false,
-      branchIds: [],
-      customerId: 1,
-    };
-    expect(
-      TransportLoginResponseSchema.safeParse({
-        twoFactorEnabled: null,
-        user,
-        jwtToken: "jwt",
-        resetPassword: false,
-      }).success,
-    ).toBe(true);
-    expect(
-      TransportLoginResponseSchema.safeParse({
-        twoFactorEnabled: null,
-        user: { ...user, role: { id: 2, name: "PARTICIPANT" } },
-        jwtToken: "jwt",
-        resetPassword: false,
-      }).success,
-    ).toBe(false);
-  });
-});
-
 const loginMocks = vi.hoisted(() => ({ request: vi.fn(), setCookie: vi.fn(), clear: vi.fn() }));
 vi.mock("@/lib/api/iam", () => ({ transportRequest: loginMocks.request }));
 vi.mock("@/lib/auth/cookies", () => ({
   setAccessTokenCookie: loginMocks.setCookie,
   clearAuthCookies: loginMocks.clear,
 }));
-describe("BFF de login de Transportes Guatemala", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-  function request(body: unknown, origin = "http://localhost:3000") {
-    return new NextRequest("http://localhost:3000/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Origin: origin },
-      body: JSON.stringify(body),
-    });
-  }
+describe("Acceso por contrato SSOT, HU-ID-01/02/03", () => {
   const credentials = { email: "cliente@example.com", password: "secreto" };
   const user = {
     id: 1,
-    email: "cliente@example.com",
+    email: credentials.email,
     role: { id: 2, name: "CUSTOMER" },
     isActive: true,
     name: "Ana",
@@ -211,64 +125,7 @@ describe("BFF de login de Transportes Guatemala", () => {
     twoFactorEnabled: false,
     resetPassword: false,
   };
-  it("guarda el JWT sin exponerlo en la respuesta", async () => {
-    loginMocks.request.mockResolvedValue({
-      twoFactorEnabled: null,
-      user,
-      jwtToken: "token-privado",
-      resetPassword: false,
-    });
-    const response = await POST(request(credentials));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "authenticated", redirect: "/" });
-    expect(loginMocks.setCookie).toHaveBeenCalledWith("token-privado");
-  });
-  it("no concede acceso antes del segundo factor", async () => {
-    loginMocks.request.mockResolvedValue({
-      twoFactorEnabled: true,
-      user,
-      jwtToken: null,
-      resetPassword: false,
-    });
-    const response = await POST(request(credentials));
-    expect(await response.json()).toEqual({ status: "two_factor_required" });
-    expect(loginMocks.setCookie).not.toHaveBeenCalled();
-  });
-  it("envia el codigo al endpoint de segundo factor", async () => {
-    loginMocks.request.mockResolvedValue({
-      twoFactorEnabled: null,
-      user,
-      jwtToken: "token",
-      resetPassword: false,
-    });
-    await POST(request({ ...credentials, code: "1234" }));
-    expect(loginMocks.request).toHaveBeenCalledWith("auth/login/tfa", {
-      body: { ...credentials, code: "1234" },
-    });
-  });
-  it("no crea sesion si se requiere cambiar la clave", async () => {
-    loginMocks.request.mockResolvedValue({
-      twoFactorEnabled: null,
-      user,
-      jwtToken: null,
-      resetPassword: true,
-    });
-    const response = await POST(request(credentials));
-    expect((await response.json()).status).toBe("password_reset_required");
-    expect(loginMocks.setCookie).not.toHaveBeenCalled();
-  });
-  it("rechaza solicitudes de otro origen antes de llamar al backend", async () => {
-    expect((await POST(request(credentials, "https://otro.example"))).status).toBe(403);
-    expect(loginMocks.request).not.toHaveBeenCalled();
-  });
-  it("rechaza credenciales incompletas", async () => {
-    expect((await POST(request({ email: "incorrecto" }))).status).toBe(400);
-    expect(loginMocks.request).not.toHaveBeenCalled();
-  });
-});
-
-describe("Registro de clientes de Transportes Guatemala", () => {
-  const body = {
+  const registerBody = {
     person: {
       name: "Ana",
       lastName: "Perez",
@@ -278,76 +135,172 @@ describe("Registro de clientes de Transportes Guatemala", () => {
       adress: "Guatemala",
     },
     credentials: {
-      email: "ana@example.com",
+      email: credentials.email,
       password: "password123",
       confirmPassword: "password123",
     },
   };
-  function request(data: unknown, origin = "http://localhost:3000") {
-    return new NextRequest("http://localhost:3000/api/users/register", {
+  function request(body: unknown, origin = "http://localhost:3000") {
+    return new NextRequest("http://localhost:3000/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: origin },
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
   }
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
-  it("rechaza contrasenas diferentes, datos vacios y limites excedidos", () => {
-    expect(
-      TransportRegisterRequestSchema.safeParse({
-        ...body,
-        credentials: { ...body.credentials, confirmPassword: "otra" },
-      }).success,
-    ).toBe(false);
-    expect(
-      TransportRegisterRequestSchema.safeParse({ ...body, person: { ...body.person, name: "   " } })
-        .success,
-    ).toBe(false);
-    expect(
-      TransportRegisterRequestSchema.safeParse({
-        ...body,
-        person: { ...body.person, adress: "a".repeat(101) },
-      }).success,
-    ).toBe(false);
+  it("acepta credenciales y rechaza el payload heredado con contraseña en A2F", async () => {
+    expect(TransportLoginRequestSchema.safeParse(credentials).success).toBe(true);
+    for (const body of [
+      { ...credentials, code: "1234" },
+      { email: credentials.email },
+      { ...credentials, role: "ADMIN" },
+    ]) {
+      expect((await POST(request(body))).status).toBe(400);
+    }
+    expect(loginMocks.request).not.toHaveBeenCalled();
   });
-  it("registra sin exponer datos ni crear cookies y descarta roles enviados", async () => {
-    loginMocks.request.mockResolvedValue({
-      id: 1,
-      customerId: 1,
-      email: "ana@example.com",
-      role: { id: 2, name: "CUSTOMER" },
-      isActive: true,
-      name: "Ana",
-      lastName: "Perez",
-      twoFactorEnabled: false,
-      resetPassword: false,
-      branchIds: [],
+  it.each([{ accessToken: "privado" }, { challengeId: "opaque-challenge", requires2FA: true }])(
+    "acepta la alternativa de acceso %j",
+    (body) => {
+      expect(TransportLoginResponseSchema.safeParse(body).success).toBe(true);
+    },
+  );
+  it.each([
+    { accessToken: "privado", challengeId: "reto", requires2FA: true },
+    { challengeId: "reto", requires2FA: false },
+    { requires2FA: true },
+    { jwtToken: "legacy", user, twoFactorEnabled: false, resetPassword: false },
+  ])("rechaza respuestas de acceso ambiguas o heredadas: %j", (body) => {
+    expect(TransportLoginResponseSchema.safeParse(body).success).toBe(false);
+  });
+  it.each(["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "DRIVER", "CASHIER"])(
+    "conserva el acceso para el rol %s y verifica el perfil antes de crear cookie",
+    async (role) => {
+      loginMocks.request
+        .mockResolvedValueOnce({ accessToken: "token-privado" })
+        .mockResolvedValueOnce({ ...user, role: { id: 1, name: role } });
+      const response = await POST(request(credentials));
+      expect(await response.json()).toEqual({ status: "authenticated", redirect: "/" });
+      expect(loginMocks.request).toHaveBeenNthCalledWith(1, "auth/login", { body: credentials });
+      expect(loginMocks.request).toHaveBeenNthCalledWith(2, "users/profile", {
+        token: "token-privado",
+      });
+      expect(loginMocks.setCookie).toHaveBeenCalledWith("token-privado");
+    },
+  );
+  it("no consulta perfil ni crea acceso mientras hay desafío", async () => {
+    loginMocks.request.mockResolvedValueOnce({ challengeId: "desafio", requires2FA: true });
+    expect(await (await POST(request(credentials))).json()).toEqual({
+      status: "two_factor_required",
+      challengeId: "desafio",
     });
-    const response = await registerPost(request({ ...body, role: "ADMIN" }));
-    expect(response.status).toBe(201);
-    expect((await response.json()).status).toBe("registered");
-    expect(loginMocks.request).toHaveBeenCalledWith("auth/register", { body });
+    expect(loginMocks.setCookie).not.toHaveBeenCalled();
+    expect(loginMocks.clear).toHaveBeenCalledTimes(1);
+    expect(loginMocks.request).toHaveBeenCalledTimes(1);
+  });
+  it("envía solo challengeId y code al endpoint A2F", async () => {
+    const body = { challengeId: "desafio", code: "1234" };
+    loginMocks.request.mockResolvedValueOnce({ accessToken: "token" }).mockResolvedValueOnce(user);
+    expect((await POST(request(body))).status).toBe(200);
+    expect(loginMocks.request).toHaveBeenNthCalledWith(1, "auth/login/tfa", { body });
+  });
+  it("rechaza un segundo desafío como resultado de verificar el primero", async () => {
+    loginMocks.request.mockResolvedValueOnce({ challengeId: "otro", requires2FA: true });
+    expect((await POST(request({ challengeId: "desafio", code: "1234" }))).status).toBe(502);
     expect(loginMocks.setCookie).not.toHaveBeenCalled();
   });
-  it("rechaza solicitudes de otro origen", async () => {
-    expect((await registerPost(request(body, "https://otro.example"))).status).toBe(403);
-    expect(loginMocks.request).not.toHaveBeenCalled();
-  });
-  it("no llama al backend para datos invalidos", async () => {
-    expect((await registerPost(request({}))).status).toBe(400);
-    expect(loginMocks.request).not.toHaveBeenCalled();
-  });
-  it("mantiene el conflicto por cuenta duplicada", async () => {
-    loginMocks.request.mockRejectedValue(
-      new ApplicationError("resource.conflict", 409, "Cuenta duplicada"),
+  it.each([{ ...user, isActive: false }, { ...user, role: { id: 1, name: "PARTICIPANT" } }, {}])(
+    "no concede sesión con perfil inválido %j",
+    async (profile) => {
+      loginMocks.request
+        .mockResolvedValueOnce({ accessToken: "token" })
+        .mockResolvedValueOnce(profile);
+      expect((await POST(request(credentials))).status).toBeGreaterThanOrEqual(400);
+      expect(loginMocks.setCookie).not.toHaveBeenCalled();
+    },
+  );
+  it("conserva la recuperación cuando el perfil exige cambiar clave", async () => {
+    loginMocks.request
+      .mockResolvedValueOnce({ accessToken: "token" })
+      .mockResolvedValueOnce({ ...user, resetPassword: true });
+    expect((await (await POST(request(credentials))).json()).status).toBe(
+      "password_reset_required",
     );
-    expect((await registerPost(request(body))).status).toBe(409);
-  });
-  it("no confirma un registro si el backend devuelve una respuesta inesperada", async () => {
-    loginMocks.request.mockResolvedValue({});
-    expect((await registerPost(request(body))).status).toBe(502);
     expect(loginMocks.setCookie).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 409, 422, 503])(
+    "conserva error %i de Identity sin repetir el acceso",
+    async (status) => {
+      loginMocks.request.mockRejectedValueOnce(
+        new ApplicationError("system.internal_error", status, "Rechazado", {
+          code: "IDENTITY_ERROR",
+          correlationId: "correlation-1",
+        }),
+      );
+      const response = await POST(request(credentials));
+      expect(response.status).toBe(status);
+      expect(await response.json()).toMatchObject({
+        code: "IDENTITY_ERROR",
+        correlationId: "correlation-1",
+      });
+      expect(loginMocks.request).toHaveBeenCalledTimes(1);
+      expect(loginMocks.setCookie).not.toHaveBeenCalled();
+    },
+  );
+  it("rechaza otro origen antes de contactar Identity", async () => {
+    expect((await POST(request(credentials, "https://otro.example"))).status).toBe(403);
+    expect(loginMocks.request).not.toHaveBeenCalled();
+  });
+  it("registra CUSTOMER con campos canónicos sin confirmar contraseña ni rol en upstream", async () => {
+    loginMocks.request.mockResolvedValueOnce({
+      userId: 100,
+      customerId: 700,
+      emailVerificationRequired: true,
+    });
+    const response = await registerPost(request(registerBody));
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      status: "registered",
+      emailVerificationRequired: true,
+    });
+    expect(loginMocks.request).toHaveBeenCalledWith("auth/register", {
+      body: {
+        name: "Ana",
+        lastName: "Perez",
+        dpi: "1234567890123",
+        nit: "1234567",
+        phone: "55555555",
+        address: "Guatemala",
+        email: credentials.email,
+        password: "password123",
+      },
+    });
+    expect(loginMocks.setCookie).not.toHaveBeenCalled();
+  });
+  it.each([
+    { ...registerBody, role: "ADMIN" },
+    { ...registerBody, person: { ...registerBody.person, nit: " cf " } },
+    { ...registerBody, credentials: { ...registerBody.credentials, confirmPassword: "otra" } },
+  ])("rechaza alta no personal, roles o claves diferentes %j", async (body) => {
+    expect((await registerPost(request(body))).status).toBe(400);
+    expect(loginMocks.request).not.toHaveBeenCalled();
+  });
+  it.each([{}, { userId: 1, customerId: 7, emailVerificationRequired: false }])(
+    "no anuncia alta sin verificación %j",
+    async (body) => {
+      loginMocks.request.mockResolvedValueOnce(body);
+      expect((await registerPost(request(registerBody))).status).toBe(502);
+      expect(loginMocks.setCookie).not.toHaveBeenCalled();
+    },
+  );
+  it("mantiene conflicto al registrar cuenta existente", async () => {
+    loginMocks.request.mockRejectedValueOnce(
+      new ApplicationError("resource.conflict", 409, "Cuenta existente"),
+    );
+    expect((await registerPost(request(registerBody))).status).toBe(409);
+    expect(loginMocks.request).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -17,11 +17,12 @@ import {
   UpdateBusSchema,
   BusListRecordSchema,
   CreatedBusSchema,
-  type BusFormData,
-  type CreatedBus,
   fleetPhotoError,
-  type BusListRecord,
 } from "@/lib/validators/fleet-resources";
+import type { BusFormData, CreatedBus, BusListRecord } from "@/types/fleet";
+import { useCustomerData } from "@/hooks/useCustomerData";
+import { BusTypeListSchema } from "@/lib/validators/bus-type";
+import { BusStateListSchema } from "@/lib/validators/fleet-resources";
 const fields: {
   name: FieldPath<BusFormData>;
   label: string;
@@ -33,9 +34,9 @@ const fields: {
   { name: "plateNumber", label: "Número de placa", maxLength: 255 },
   { name: "brand", label: "Marca", maxLength: 255 },
   { name: "color", label: "Color", maxLength: 255 },
-  { name: "model", label: "Modelo (año)", numeric: true, min: 1980, max: 9999 },
+  { name: "model", label: "Modelo", maxLength: 100 },
   { name: "year_manufacture", label: "Año de fabricación", numeric: true, min: 1, max: 9999 },
-  { name: "currentKm", label: "Kilometraje inicial", numeric: true, min: 1, max: 2147483647 },
+  { name: "currentKm", label: "Kilometraje inicial", numeric: true, min: 0, max: 2147483647 },
   { name: "seatRows", label: "Filas de asientos", numeric: true, min: 1, max: 30 },
   { name: "seatColumns", label: "Columnas de asientos", numeric: true, min: 1, max: 6 },
 ];
@@ -57,7 +58,8 @@ export function CreateBusForm({
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedBus | null>(null);
-  const [editCapacity, setEditCapacity] = useState(bus?.capacity ?? 0);
+  const types = useCustomerData("/api/branch-admin/bus-types", BusTypeListSchema);
+  const states = useCustomerData("/api/branch-admin/bus-states", BusStateListSchema);
   const { register, handleSubmit, getFieldState, formState, watch, reset } = useForm<BusFormData>({
     resolver: zodResolver(bus ? EditBusFormSchema : BusFormSchema),
     defaultValues: bus
@@ -66,13 +68,15 @@ export function CreateBusForm({
           plateNumber: bus.plateNumber,
           brand: bus.brand,
           color: bus.color ?? "",
-          model: Number(bus.model),
+          model: bus.model,
           year_manufacture: bus.yearManufacture ?? Number.NaN,
           currentKm: bus.currentKm ?? 0,
           seatRows: bus.seatRows ?? Number.NaN,
           seatColumns: bus.seatColumns ?? Number.NaN,
+          busTypeId: bus.busTypeId ?? Number.NaN,
+          rentalEnabled: bus.rentalEnabled ?? false,
         }
-      : { branchId: branch.id },
+      : { branchId: branch.id, rentalEnabled: false },
   });
   const rows = watch("seatRows"),
     columns = watch("seatColumns");
@@ -83,9 +87,23 @@ export function CreateBusForm({
     Number.isInteger(columns) &&
     columns > 0 &&
     columns <= 6;
-  const capacity = validSeats ? rows * columns : 0;
+  const typeId = watch("busTypeId");
+  const selectedType = types.data?.find((type) => type.id === typeId);
+  const capacity = selectedType?.capacity ?? 0;
   async function submit(data: BusFormData) {
     if (active.current || busy || uncertain) return;
+    if (!bus && (!data.stateId || !states.data?.some((state) => state.id === data.stateId))) {
+      setError("Selecciona un estado inicial válido del bus.");
+      return;
+    }
+    if (!selectedType || (!selectedType.active && selectedType.id !== bus?.busTypeId)) {
+      setError("Selecciona un tipo de bus activo del catálogo.");
+      return;
+    }
+    if (!validSeats || capacity > rows * columns) {
+      setError("La distribución debe tener espacio para la capacidad del tipo de bus.");
+      return;
+    }
     const validation = !bus || photo ? fleetPhotoError(photo) : null;
     setPhotoError(validation);
     if (validation) return;
@@ -99,7 +117,9 @@ export function CreateBusForm({
           yearManufacture: data.year_manufacture,
           seatRows: data.seatRows,
           seatColumns: data.seatColumns,
-          capacity: editCapacity,
+          capacity,
+          busTypeId: data.busTypeId,
+          rentalEnabled: data.rentalEnabled,
         })
       : null;
     if (edit && !edit.success) {
@@ -188,11 +208,13 @@ export function CreateBusForm({
               plateNumber: "",
               brand: "",
               color: "",
-              model: Number.NaN,
+              model: "",
               year_manufacture: Number.NaN,
               currentKm: Number.NaN,
               seatRows: Number.NaN,
               seatColumns: Number.NaN,
+              busTypeId: Number.NaN,
+              rentalEnabled: false,
             });
           }}
         >
@@ -209,6 +231,67 @@ export function CreateBusForm({
         </h2>
         <form noValidate onSubmit={(event) => void handleSubmit(submit)(event)}>
           <fieldset disabled={busy || uncertain} className="grid gap-5 sm:grid-cols-2">
+            {!bus && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="bus-state">Estado inicial</Label>
+                <select
+                  id="bus-state"
+                  disabled={states.loading || !!states.error}
+                  className="h-12 w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3"
+                  {...register("stateId", { valueAsNumber: true })}
+                >
+                  <option value="">Selecciona un estado</option>
+                  {states.data?.map((state) => (
+                    <option key={state.id} value={state.id}>
+                      {state.name}
+                    </option>
+                  ))}
+                </select>
+                {states.error && (
+                  <p role="alert">
+                    {states.error}{" "}
+                    <button type="button" className="underline" onClick={states.refresh}>
+                      Consultar estados nuevamente
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="bus-type">Tipo de bus</Label>
+              <select
+                id="bus-type"
+                value={Number.isFinite(typeId) ? String(typeId) : ""}
+                disabled={types.loading || !!types.error}
+                className="h-12 w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3"
+                {...register("busTypeId", { valueAsNumber: true })}
+              >
+                <option value="">{types.loading ? "Cargando tipos…" : "Selecciona un tipo"}</option>
+                {types.data
+                  ?.filter((type) => type.active || type.id === bus?.busTypeId)
+                  .map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name} · {type.capacity} pasajeros{type.active ? "" : " (inactivo)"}
+                    </option>
+                  ))}
+              </select>
+              {formState.errors.busTypeId && (
+                <p role="alert" className="text-sm text-red-600">
+                  Selecciona un tipo de bus.
+                </p>
+              )}
+              {types.error && (
+                <p role="alert">
+                  {types.error}{" "}
+                  <button type="button" className="underline" onClick={types.refresh}>
+                    Consultar tipos nuevamente
+                  </button>
+                </p>
+              )}
+              {!types.loading && !types.error && types.data?.length === 0 && (
+                <p role="status">El administrador debe registrar tipos de bus para continuar.</p>
+              )}
+            </div>
             {fields
               .filter((field) => !bus || field.name !== "currentKm")
               .map((field) => (
@@ -231,20 +314,21 @@ export function CreateBusForm({
               <Label htmlFor="bus-capacity">Capacidad de pasajeros</Label>
               <Input
                 id="bus-capacity"
-                type={bus ? "number" : "text"}
+                type="text"
                 min={1}
                 step={1}
-                readOnly={!bus}
-                value={bus ? (Number.isNaN(editCapacity) ? "" : editCapacity) : capacity || ""}
-                onChange={bus ? (event) => setEditCapacity(event.target.valueAsNumber) : undefined}
+                readOnly
+                value={capacity || ""}
               />
               <p className="text-xs text-[var(--tg-muted)]">
-                {bus
-                  ? "Confirma la capacidad del bus al modificar su distribución."
-                  : "Se calcula multiplicando filas por columnas."}
+                La capacidad corresponde al tipo seleccionado y debe caber en la distribución.
               </p>
             </div>
           </fieldset>
+          <label className="mt-5 flex items-center gap-3 text-sm">
+            <input type="checkbox" disabled={busy || uncertain} {...register("rentalEnabled")} />{" "}
+            Habilitado para alquiler privado
+          </label>
           <div className="mt-6">
             <BusPhotoInput
               required={!bus}
@@ -271,7 +355,11 @@ export function CreateBusForm({
               </Link>
             </p>
           )}
-          <Button type="submit" disabled={busy || uncertain} className="mt-7 w-full sm:w-auto">
+          <Button
+            type="submit"
+            disabled={busy || uncertain || types.loading || !!types.error}
+            className="mt-7 w-full sm:w-auto"
+          >
             {busy ? (bus ? "Guardando…" : "Creando bus…") : bus ? "Guardar cambios" : "Crear bus"}
           </Button>
           {onCancel && (
@@ -300,7 +388,7 @@ export function CreateBusForm({
             style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
             aria-label="Vista previa de la distribución de asientos"
           >
-            {Array.from({ length: capacity }, (_, index) => (
+            {Array.from({ length: Math.min(capacity, rows * columns) }, (_, index) => (
               <span
                 key={index}
                 aria-hidden="true"

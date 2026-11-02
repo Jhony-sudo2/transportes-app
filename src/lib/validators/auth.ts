@@ -55,7 +55,7 @@ export type SessionData = z.infer<typeof SessionSchema>;
 
 // Transportes Guatemala: contratos independientes del dominio anterior.
 export const TransportUserSchema = z.object({
-  id: z.number().int().positive(),
+  id: z.number().int().positive().safe(),
   email: z.string().email(),
   role: z.object({
     id: z.number().int(),
@@ -72,45 +72,93 @@ export const TransportUserSchema = z.object({
   adress: z.string().nullish(),
   twoFactorEnabled: z.boolean(),
   resetPassword: z.boolean(),
-  branchIds: z.array(z.number().int()).nullish(),
-  customerId: z.number().int().nullish(),
+  branchIds: z.array(z.number().int().positive().safe()).nullish(),
+  customerId: z.number().int().positive().safe().nullish(),
 });
 export const TransportLoginRequestSchema = LoginRequestSchema.extend({
   email: z.string().trim().email("Correo electrónico inválido").max(255),
   password: z.string().min(1, "La contraseña es requerida").max(100),
-  code: z.string().trim().min(1, "Ingresa el código").max(10).optional(),
+}).strict();
+export const TransportTfaRequestSchema = z
+  .object({
+    challengeId: z.string().min(1).max(8192),
+    code: z.string().trim().min(1, "Ingresa el código").max(10),
+  })
+  .strict();
+export const TransportAuthRequestSchema = z.union([
+  TransportLoginRequestSchema,
+  TransportTfaRequestSchema,
+]);
+export const TransportAccessResponseSchema = z.object({
+  accessToken: z.string().min(1),
+  challengeId: z.never().optional(),
+  requires2FA: z.literal(false).optional(),
 });
-export const TransportLoginResponseSchema = z.object({
-  twoFactorEnabled: z.boolean().nullable(),
-  user: TransportUserSchema.nullable(),
-  jwtToken: z.string().min(1).nullable(),
-  resetPassword: z.boolean(),
-});
-export type TransportUser = z.infer<typeof TransportUserSchema>;
-export type TransportLoginRequest = z.infer<typeof TransportLoginRequestSchema>;
+export const TransportLoginResponseSchema = z.union([
+  TransportAccessResponseSchema,
+  z.object({
+    challengeId: z.string().min(1).max(8192),
+    requires2FA: z.literal(true),
+    accessToken: z.never().optional(),
+  }),
+]);
 
 const transportRequiredText = z.string().trim().min(1, "Este campo es requerido");
-export const TransportRegisterRequestSchema = z.object({
-  person: z.object({
-    name: transportRequiredText.max(255),
-    lastName: transportRequiredText.max(255),
-    dpi: transportRequiredText.max(50),
-    nit: transportRequiredText.max(50),
-    phone: transportRequiredText.max(20),
-    adress: transportRequiredText.max(100),
-  }),
-  credentials: z
-    .object({
-      email: z.string().trim().email("Correo electrónico inválido").max(255),
-      password: z.string().min(8, "Usa al menos 8 caracteres").max(100),
-      confirmPassword: z.string().min(1, "Confirma tu contraseña").max(100),
-    })
-    .refine((data) => data.password === data.confirmPassword, {
-      message: "Las contraseñas no coinciden",
-      path: ["confirmPassword"],
-    }),
+export const TransportRegisterRequestSchema = z
+  .object({
+    person: z
+      .object({
+        name: transportRequiredText.max(255),
+        lastName: transportRequiredText.max(255),
+        dpi: transportRequiredText.max(50),
+        nit: transportRequiredText
+          .max(50)
+          .refine(
+            (value) => value.toUpperCase() !== "CF",
+            "Ingresa tu NIT personal; CF está reservado para compras presenciales",
+          ),
+        phone: transportRequiredText.max(20),
+        adress: transportRequiredText.max(100),
+      })
+      .strict(),
+    credentials: z
+      .object({
+        email: z.string().trim().email("Correo electrónico inválido").max(255),
+        password: z.string().min(8, "Usa al menos 8 caracteres").max(100),
+        confirmPassword: z.string().min(1, "Confirma tu contraseña").max(100),
+      })
+      .strict()
+      .refine((data) => data.password === data.confirmPassword, {
+        message: "Las contraseñas no coinciden",
+        path: ["confirmPassword"],
+      }),
+  })
+  .strict();
+
+export const TransportRegisterResponseSchema = z.object({
+  userId: z.number().int().positive().safe(),
+  customerId: z.number().int().positive().safe(),
+  emailVerificationRequired: z.literal(true),
 });
-export type TransportRegisterRequest = z.infer<typeof TransportRegisterRequestSchema>;
+export const TransportRegisterUiResponseSchema = z.object({
+  status: z.literal("registered"),
+  emailVerificationRequired: z.literal(true),
+});
+// Tokens de email opacos: no se presupone que sean JWT ni se inspecciona su contenido.
+export const IdentityEmailTokenSchema = z
+  .object({ token: z.string().min(1, "Abre el enlace que recibiste por correo").max(8192) })
+  .strict();
+export const IdentityEmailRequestSchema = z
+  .object({ email: z.string().trim().email("Ingresa un correo válido").max(254) })
+  .strict();
+export const IdentityEmailConfirmedSchema = z.object({ emailVerified: z.literal(true) });
+export const IdentityEmailAcceptedSchema = z.object({ accepted: z.literal(true) });
+export const IdentityEmailPendingSchema = z.object({ verificationPending: z.literal(true) });
+export const TransportLoginUiResponseSchema = z.union([
+  z.object({ status: z.literal("authenticated"), redirect: z.literal("/") }),
+  z.object({ status: z.literal("two_factor_required"), challengeId: z.string().min(1).max(8192) }),
+  z.object({ status: z.literal("password_reset_required"), detail: z.string() }),
+]);
 
 export const TransportForgotPasswordSchema = z.object({
   email: z.string().trim().email("Correo electrónico inválido").max(255),
@@ -137,5 +185,3 @@ export const TransportResetPasswordSchema = z
     message: "Las contraseñas no coinciden",
     path: ["confirmPassword"],
   });
-export type TransportForgotPassword = z.infer<typeof TransportForgotPasswordSchema>;
-export type TransportResetPassword = z.infer<typeof TransportResetPasswordSchema>;

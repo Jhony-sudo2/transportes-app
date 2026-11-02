@@ -1,8 +1,12 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { transportRequest } from "@/lib/api/iam";
-import { TransportRegisterRequestSchema, TransportUserSchema } from "@/lib/validators/auth";
+import {
+  TransportRegisterRequestSchema,
+  TransportRegisterResponseSchema,
+} from "@/lib/validators/auth";
 import { ApplicationError } from "@/types/error";
+import { applicationErrorResponse } from "@/lib/api/responses";
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (request.headers.get("origin") !== request.nextUrl.origin)
@@ -19,20 +23,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { detail: parsed.error.issues.map((i) => i.message).join(" ") },
         { status: 400 },
       );
-    TransportUserSchema.parse(await transportRequest("auth/register", { body: parsed.data }));
+    const { person, credentials } = parsed.data;
+    TransportRegisterResponseSchema.parse(
+      await transportRequest("auth/register", {
+        body: {
+          nit: person.nit,
+          dpi: person.dpi,
+          name: person.name,
+          lastName: person.lastName,
+          phone: person.phone,
+          address: person.adress,
+          email: credentials.email,
+          password: credentials.password,
+        },
+      }),
+    );
     return NextResponse.json(
-      { status: "registered", detail: "Cuenta creada correctamente. Ya puedes iniciar sesión." },
+      {
+        status: "registered",
+        emailVerificationRequired: true,
+        detail:
+          "Cuenta creada. Confirma tu correo desde el enlace que recibirás antes de iniciar sesión.",
+      },
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof ApplicationError) return applicationErrorResponse(error);
     return NextResponse.json(
       {
         detail:
-          error instanceof ApplicationError
-            ? error.message
-            : "No se pudo confirmar la creación de la cuenta. Intenta iniciar sesión antes de repetir el registro.",
+          "No se pudo confirmar la creación de la cuenta. Revisa tu correo o solicita un enlace de verificación antes de repetir el registro.",
       },
-      { status: error instanceof ApplicationError ? error.status : 502 },
+      { status: 502 },
     );
   }
 }

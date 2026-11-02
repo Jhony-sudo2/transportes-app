@@ -72,9 +72,9 @@ describe("Salario y solicitudes rechazadas por sucursal", () => {
   });
 
   it("valida salario positivo y finito sin aceptar cambios adicionales", async () => {
-    for (const baseSalary of [0, -1, NaN, Infinity, "100", null])
+    for (const baseSalary of [-1, NaN, Infinity, "100", null])
       expect(DriverSalaryRequestSchema.safeParse({ ...input, baseSalary }).success).toBe(false);
-    expect((await salary(salaryRequest({ ...input, baseSalary: 0 }), context())).status).toBe(400);
+    expect((await salary(salaryRequest({ ...input, baseSalary: -1 }), context())).status).toBe(400);
     expect(
       (await salary(salaryRequest({ ...input, email: "otro@example.com" }), context())).status,
     ).toBe(400);

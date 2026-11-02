@@ -14,10 +14,8 @@ import {
   CreateDriverSchema,
   CreatedDriverSchema,
   driverPhotoError,
-  type DriverFormData,
-  type CreatedDriver,
-  type DriverOperationReference,
 } from "@/lib/validators/fleet-resources";
+import type { DriverFormData, CreatedDriver, DriverOperationReference } from "@/types/fleet";
 import { useEffect } from "react";
 import { LicenseTypeListSchema } from "@/lib/validators/fleet-resources";
 const fields: {
@@ -204,7 +202,7 @@ export function CreateDriverForm({
                   label={field.label}
                   type={field.type ?? "text"}
                   step={field.numeric ? ".01" : undefined}
-                  min={field.numeric ? ".01" : undefined}
+                  min={field.numeric ? "0" : undefined}
                   maxLength={field.maxLength}
                   autoComplete={field.autoComplete ?? "off"}
                   required

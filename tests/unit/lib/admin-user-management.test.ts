@@ -35,7 +35,7 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
     mocks.session.mockResolvedValue(admin);
     mocks.cookie.mockReturnValue({ value: "private-token" });
     mocks.fetch.mockImplementation(async (url: string, options: RequestInit) => {
-      if (options.method === "POST") return new Response(null, { status: 204 });
+      if (options.method === "PATCH") return Response.json({ ...user, branchIds: [2, 3] });
       return Response.json(url.includes("/branches") ? [2] : page);
     });
   });
@@ -63,6 +63,22 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
     );
     expect(await (await list(request())).json()).toEqual(page);
   });
+  it("envía filtros de rol, estado y sucursal al listado de personal", async () => {
+    const response = await list(request("?role=CASHIER&active=false&branchId=2"));
+    expect(response.status).toBe(200);
+    const url = new URL(mocks.fetch.mock.calls[0]?.[0]);
+    expect(url.pathname).toMatch(/users\/staff$/);
+    expect(url.searchParams.get("role")).toBe("CASHIER");
+    expect(url.searchParams.get("active")).toBe("false");
+    expect(url.searchParams.get("branchId")).toBe("2");
+  });
+  it.each(["?role=ROOT", "?active=maybe", "?branchId=0", "?branchId=9007199254740992"])(
+    "rechaza filtro no válido %s",
+    async (query) => {
+      expect((await list(request(query))).status).toBe(400);
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
   it("normaliza CASHIER para mostrar su rol", async () => {
     mocks.fetch.mockResolvedValueOnce(
       Response.json({ ...page, content: [{ ...user, role: { id: 5, name: "CASHIER" } }] }),
@@ -94,15 +110,16 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
     expect(await (await branches(branchRequest(), context())).json()).toEqual([2]);
     expect(mocks.fetch.mock.calls[0]?.[0]).toMatch(/users\/9\/branches$/);
   });
-  it("asigna con el DTO actual del servicio y acepta 204 sin JSON", async () => {
+  it("asigna con PATCH de personal y confirma el estado devuelto", async () => {
     const response = await assign(post(), context());
     expect(response.status).toBe(204);
     expect(await response.text()).toBe("");
-    const [url, options] = mocks.fetch.mock.calls[0]!;
-    expect(url).toMatch(/users\/branch-administrators$/);
-    expect(JSON.parse(options.body)).toEqual({ userId: 9, branchId: 3 });
+    const [url, options] = mocks.fetch.mock.calls[1]!;
+    expect(url).toMatch(/users\/staff\/9$/);
+    expect(options.method).toBe("PATCH");
+    expect(JSON.parse(options.body)).toEqual({ branchIds: [2, 3] });
     expect(options.headers.Authorization).toBe("Bearer private-token");
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
   });
   it.each(["SUCURSAL_ADMIN", "CAJERO", "CUSTOMER", "DRIVER"])(
     "impide a %s listar o asignar usuarios",
@@ -150,17 +167,20 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it("muestra el rechazo del servicio sin cambiar sus reglas", async () => {
-    mocks.fetch.mockResolvedValueOnce(
-      Response.json({ detail: "El usuario ya tiene una sucursal asignada" }, { status: 409 }),
-    );
+    mocks.fetch
+      .mockResolvedValueOnce(Response.json([2]))
+      .mockResolvedValueOnce(
+        Response.json({ detail: "El usuario ya tiene una sucursal asignada" }, { status: 409 }),
+      );
     const response = await assign(post(), context());
     expect(response.status).toBe(409);
     expect((await response.json()).detail).toBe("El usuario ya tiene una sucursal asignada");
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
   });
   it.each(["timeout", "server-error", "unexpected-success"])(
     "no reenvía una asignación de resultado incierto: %s",
     async (failure) => {
+      mocks.fetch.mockResolvedValueOnce(Response.json([2]));
       if (failure === "timeout") mocks.fetch.mockRejectedValueOnce(new Error("timeout"));
       else
         mocks.fetch.mockResolvedValueOnce(
@@ -169,7 +189,7 @@ describe("Listado de usuarios y asignación desde ADMIN", () => {
       const response = await assign(post(), context());
       expect(response.status).toBe(failure === "server-error" ? 503 : 502);
       expect((await response.json()).detail).toContain("Actualiza");
-      expect(mocks.fetch).toHaveBeenCalledTimes(1);
+      expect(mocks.fetch).toHaveBeenCalledTimes(2);
     },
   );
   it("habilita las nuevas rutas sin caché", () => {

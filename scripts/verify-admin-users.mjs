@@ -77,15 +77,27 @@ const api = http.createServer(async (request, response) => {
       { id: 5, name: "CAJERO" },
     ]);
   if (url.pathname === "/api/v1/branches") return send(catalog);
-  const statusMatch = url.pathname.match(/^\/api\/v1\/users\/(\d+)\/(activate|deactivate)$/);
-  if (statusMatch && request.method === "PUT") {
+  const statusMatch = url.pathname.match(/^\/api\/v1\/users\/staff\/(\d+)$/);
+  if (statusMatch && request.method === "PATCH") {
     let raw = "";
     for await (const chunk of request) raw += chunk;
-    assert.equal(raw, "");
+    const input = JSON.parse(raw);
+    if ("branchIds" in input) {
+      assert.deepEqual(Object.keys(input), ["branchIds"]);
+      assignmentAttempts++;
+      const assigned = users.find((user) => user.id === Number(statusMatch[1]));
+      if (!assigned || assigned.role.name !== "SUCURSAL_ADMIN") return send({}, 403);
+      assert.ok(input.branchIds.every((id) => catalog.some((branch) => branch.id === id)));
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      assigned.branchIds = input.branchIds;
+      assignmentWrites++;
+      return send(assigned.id === 88 ? {} : assigned, assigned.id === 88 ? 503 : 200);
+    }
+    assert.deepEqual(Object.keys(input), ["active"]);
     statusAttempts++;
     const target = users.find((user) => user.id === Number(statusMatch[1]));
     if (!target) return send({}, 404);
-    const isActive = statusMatch[2] === "activate";
+    const isActive = input.active;
     if (
       !isActive &&
       target.role.name === "ADMIN" &&
@@ -97,7 +109,7 @@ const api = http.createServer(async (request, response) => {
     statusWrites++;
     return send(uncertainStatus ? {} : target, uncertainStatus ? 503 : 200);
   }
-  if (url.pathname === "/api/v1/users" && request.method === "GET") {
+  if (url.pathname === "/api/v1/users/staff" && request.method === "GET") {
     if (listFailure) return send({}, 503);
     assert.equal(url.searchParams.get("size"), "10");
     assert.equal(url.searchParams.get("sortBy"), "id");
@@ -138,7 +150,7 @@ const api = http.createServer(async (request, response) => {
     response.end();
     return;
   }
-  if (url.pathname === "/api/v1/users" && request.method === "POST") {
+  if (url.pathname === "/api/v1/users/staff" && request.method === "POST") {
     let raw = "";
     for await (const chunk of request) raw += chunk;
     const input = JSON.parse(raw);
@@ -148,12 +160,12 @@ const api = http.createServer(async (request, response) => {
       name: input.person.name,
       lastName: input.person.lastName,
       email: input.email,
-      role: { id: input.roleId, name: "CUSTOMER" },
-      branchIds: [],
+      role: { id: { ADMIN: 1, SUCURSAL_ADMIN: 3, CASHIER: 5 }[input.role], name: input.role },
+      branchIds: input.branchIds,
     };
     users.push(created);
     creationWrites++;
-    return send(created, 201);
+    return send({ userId: created.id, role: input.role, branchIds: created.branchIds }, 201);
   }
   return send({}, 404);
 });
@@ -276,17 +288,15 @@ try {
   assert.equal(assignmentWrites, 1);
   await dialog.getByLabel("Sucursal para asignar", { exact: true }).selectOption("3");
   await dialog.getByRole("button", { name: "Asignar sucursal", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toContainText(
-    "El usuario ya tiene una sucursal asignada",
-  );
+  await expect(dialog.getByRole("status").filter({ hasText: "Norte fue asignada" })).toBeVisible();
   assert.equal(assignmentAttempts, 2);
-  assert.equal(assignmentWrites, 1);
+  assert.equal(assignmentWrites, 2);
   await dialog.getByRole("button", { name: "Cerrar", exact: true }).click();
   await page.reload();
   const luis = page.getByRole("row").filter({ hasText: "luis@example.com" });
   await expect(
     luis.getByRole("button", { name: "Gestionar sucursales de luis@example.com", exact: true }),
-  ).toHaveText("Sucursales (1)");
+  ).toHaveText("Sucursales (2)");
   await page
     .getByRole("button", { name: "Gestionar sucursales de eva@example.com", exact: true })
     .click();
@@ -297,7 +307,7 @@ try {
     dialog.getByRole("button", { name: "Asignar sucursal", exact: true }),
   ).toBeDisabled();
   assert.equal(assignmentAttempts, 3);
-  assert.equal(assignmentWrites, 2);
+  assert.equal(assignmentWrites, 3);
   await dialog.getByRole("button", { name: "Actualizar sucursales", exact: true }).click();
   await expect(
     dialog.getByRole("region", { name: "Sucursales asignadas", exact: true }),
@@ -322,7 +332,8 @@ try {
     ["Correo electrónico", "nuevo@example.com"],
   ])
     await page.getByLabel(label, { exact: true }).fill(value);
-  await page.getByLabel("Rol del usuario", { exact: true }).selectOption("2");
+  await page.getByLabel("Rol del usuario", { exact: true }).selectOption("5");
+  await page.getByLabel("Sucursal del cajero", { exact: true }).selectOption("2");
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Usuario creado", exact: true })).toBeVisible();
   assert.equal(creationWrites, 1);

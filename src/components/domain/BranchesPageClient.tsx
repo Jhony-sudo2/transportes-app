@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BranchMap } from "./BranchMap";
+import { BranchAvailabilityButton } from "./BranchAvailabilityButton";
 import {
   BranchListSchema,
   BranchSchema,
@@ -15,11 +16,8 @@ import {
   LocationListSchema,
   getBranchCoordinate,
   roundCoordinate,
-  type Branch,
-  type Coordinate,
-  type CreateBranch,
-  type Location,
 } from "@/lib/validators/branch";
+import type { Branch, Coordinate, CreateBranch, Location } from "@/types/branch";
 async function responseData(response: Response): Promise<unknown> {
   const body: unknown = await response.json();
   if (!response.ok)
@@ -552,10 +550,22 @@ export function BranchesPageClient() {
                       "Ubicación administrativa no disponible"}
                   </p>
                   {branch.phone && <p className="mt-2 text-sm">{branch.phone}</p>}
+                  <p className="mt-2 text-sm">
+                    {branch.active === true
+                      ? "Habilitada"
+                      : branch.active === false
+                        ? "Sin habilitar"
+                        : "Estado operativo sin confirmar"}
+                  </p>
                   {branch.indication && (
                     <p className="mt-2 text-sm text-[var(--tg-muted)]">{branch.indication}</p>
                   )}
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <BranchAvailabilityButton
+                      branch={branch}
+                      disabled={busy || loading || formOpen}
+                      onUpdated={() => void loadBranches()}
+                    />
                     <Button
                       variant="outline"
                       size="sm"

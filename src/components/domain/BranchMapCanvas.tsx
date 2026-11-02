@@ -1,7 +1,15 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { divIcon, type Marker as LeafletMarker } from "leaflet";
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
 import type { BranchMapProps } from "@/types/branch-map";
 import { getBranchCoordinate, roundCoordinate } from "@/lib/validators/branch";
 const savedIcon = divIcon({
@@ -79,6 +87,18 @@ export default function BranchMapCanvas(props: BranchMapProps) {
           eventHandlers={{ tileerror: () => setTileError(true) }}
         />
         <MapBehavior {...props} />
+        {props.segments?.map((segment, index) => (
+          <Polyline
+            key={index}
+            positions={[
+              [segment.origin.latitude, segment.origin.longitude],
+              [segment.destination.latitude, segment.destination.longitude],
+            ]}
+            pathOptions={{ color: "#176a52", weight: 4 }}
+          >
+            <Popup>{segment.label}</Popup>
+          </Polyline>
+        ))}
         {props.branches.map((branch) => {
           const position = getBranchCoordinate(branch);
           return position ? (

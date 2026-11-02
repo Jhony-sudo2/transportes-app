@@ -7,6 +7,9 @@ import { middleware } from "@/middleware";
 const mocks = vi.hoisted(() => ({ session: vi.fn(), get: vi.fn(), fetch: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ getTransportSession: mocks.session }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: mocks.get }) }));
+vi.mock("@/lib/api/bus-types", () => ({
+  getBusTypeForUnit: async (_token: string, id: number) => ({ id, capacity: 48 }),
+}));
 const user = {
   id: 3,
   role: { id: 3, name: "SUCURSAL_ADMIN" },
@@ -15,17 +18,21 @@ const user = {
   branchIds: [1, 2],
 };
 const update = {
+  busTypeId: 1,
+  rentalEnabled: false,
   branchId: 2,
   color: "Azul",
   plateNumber: "C123ABC",
   brand: "Marca",
-  model: 2025,
+  model: "2025",
   yearManufacture: 2024,
   capacity: 48,
   seatRows: 12,
   seatColumns: 4,
 };
 const bus = {
+  busTypeId: 1,
+  rentalEnabled: false,
   id: 4,
   plateNumber: "C123ABC",
   brand: "Marca",

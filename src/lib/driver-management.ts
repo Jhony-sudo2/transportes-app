@@ -1,4 +1,4 @@
-import type { DriverListRecord } from "@/lib/validators/fleet-resources";
+import type { DriverListRecord } from "@/types/fleet";
 
 export function canDeleteDriverRequest(driver: DriverListRecord): boolean {
   return (

@@ -10,7 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useBranchWorkspace } from "@/components/layout/BranchWorkspaceProvider";
-import type { BusListRecord } from "@/lib/validators/fleet-resources";
+import type { BusListRecord } from "@/types/fleet";
 import type { FleetRecordsActions } from "./FleetRecordsList";
 import { CreateBusForm } from "./CreateBusForm";
 export function BusEditDialog({

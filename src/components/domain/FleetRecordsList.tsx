@@ -15,7 +15,7 @@ export type FleetRecordsActions<T> = {
   refresh: () => void;
   notify: (message: string) => void;
 };
-type Props<T extends { id: number } & Record<string, unknown>> = {
+type Props<T extends { id: number }> = {
   branchId: number;
   resource: "buses" | "drivers";
   schema: z.ZodType<T[], z.ZodTypeDef, unknown>;
@@ -36,7 +36,7 @@ const normalize = (text: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("es")
     .trim();
-export function FleetRecordsList<T extends { id: number } & Record<string, unknown>>({
+export function FleetRecordsList<T extends { id: number }>({
   branchId,
   resource,
   schema,

@@ -48,12 +48,14 @@ export default async function Home(): Promise<React.ReactElement> {
         </p>
         <p className="my-6 text-sm text-[var(--color-text-secondary)]">
           {user.role.name === "SUCURSAL_ADMIN"
-            ? "Selecciona en la barra la sucursal que vas a administrar y registra sus buses y choferes. El módulo de viajes se habilitará en una próxima etapa."
+            ? "Selecciona una sucursal para gestionar sus rutas, viajes, buses y choferes."
             : user.role.name === "CUSTOMER"
               ? "Consulta tu billetera, tus compras, tus tickets y las devoluciones por viajes cancelados desde la barra superior."
               : user.role.name === "CAJERO"
                 ? "Consulta las facturas y registra devoluciones presenciales desde el apartado Devoluciones de tu sucursal."
-                : "Los módulos de Transportes Guatemala se habilitarán en las próximas etapas."}
+                : user.role.name === "DRIVER"
+                  ? "En Mis viajes puedes consultar tus asignaciones y registrar la salida y llegada con los datos reales del recorrido."
+                  : "Administra el personal, las sucursales y los tipos de bus desde la barra superior."}
         </p>
         <form action="/api/auth/logout" method="post">
           <Button type="submit" variant="outline">

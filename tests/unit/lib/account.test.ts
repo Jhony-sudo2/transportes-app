@@ -35,10 +35,10 @@ const user = {
 const fields = {
   name: "Ana",
   lastName: "Nueva",
-  email: "nueva@example.com",
+  email: user.email,
   phone: "55550000",
   dpi: user.dpi,
-  nit: "NIT-2",
+  nit: user.nit,
   adress: "Nueva direccion",
 };
 const driver = {
@@ -433,6 +433,16 @@ describe("Cuenta propia por rol", () => {
     expect((await update(request({ ...fields, dpi: "otro-dpi" }))).status).toBe(400);
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
+
+  it.each(["CUSTOMER", "ADMIN", "SUCURSAL_ADMIN", "DRIVER", "CAJERO"])(
+    "conserva NIT y correo en el perfil de %s incluso con body manipulado",
+    async (role) => {
+      mocks.session.mockResolvedValue({ ...user, role: { id: 1, name: role } });
+      expect((await update(request({ ...fields, nit: "NIT-AJENO" }))).status).toBe(400);
+      expect((await update(request({ ...fields, email: "nuevo@example.com" }))).status).toBe(400);
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it("no confirma un perfil devuelto con datos distintos", async () => {
     mocks.fetch.mockResolvedValueOnce(Response.json(user));

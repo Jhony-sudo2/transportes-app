@@ -7,15 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCustomerData } from "@/hooks/useCustomerData";
-import {
-  AdminUsersPageSchema,
-  ADMIN_ROLE_LABELS,
-  type AdminUser,
-} from "@/lib/validators/admin-user";
+import { AdminUsersPageSchema, ADMIN_ROLE_LABELS } from "@/lib/validators/admin-user";
+import type { AdminUser } from "@/types/admin-user";
 import { CustomerDataState } from "./CustomerDataState";
 import { ReportTable, type Column } from "./ReportTable";
 import { AdminUserBranches } from "./AdminUserBranches";
 import { AdminUserAvailabilityDialog } from "./AdminUserAvailabilityDialog";
+import { BranchListSchema } from "@/lib/validators/branch";
 
 export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
   const router = useRouter();
@@ -25,7 +23,11 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdminUser | null>(null);
   const [notice, setNotice] = useState("");
+  const [draftFilters, setDraftFilters] = useState({ role: "", active: "", branchId: "" });
+  const [filters, setFilters] = useState({ role: "", active: "", branchId: "" });
+  const branches = useCustomerData("/api/admin/branches", BranchListSchema);
   const query = new URLSearchParams({ page: String(page), email });
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
   const resource = useCustomerData(`/api/admin/users?${query}`, AdminUsersPageSchema);
   const data = resource.data;
   const columns: Column<AdminUser>[] = [
@@ -112,6 +114,7 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
           event.preventDefault();
           setPage(0);
           setEmail(search.trim());
+          setFilters(draftFilters);
           if (page === 0 && email === search.trim()) resource.refresh();
         }}
       >
@@ -126,6 +129,52 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="users-role">Filtrar por rol</Label>
+          <select
+            id="users-role"
+            value={draftFilters.role}
+            onChange={(event) => setDraftFilters({ ...draftFilters, role: event.target.value })}
+            className="h-12 rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3 text-sm"
+          >
+            <option value="">Todos los roles</option>
+            {["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "DRIVER", "CASHIER"].map((role) => (
+              <option key={role} value={role}>
+                {ADMIN_ROLE_LABELS[role]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="users-active">Filtrar por estado</Label>
+          <select
+            id="users-active"
+            value={draftFilters.active}
+            onChange={(event) => setDraftFilters({ ...draftFilters, active: event.target.value })}
+            className="h-12 rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3 text-sm"
+          >
+            <option value="">Todos los estados</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="users-branch">Filtrar por sucursal</Label>
+          <select
+            id="users-branch"
+            value={draftFilters.branchId}
+            disabled={branches.loading || !!branches.error}
+            onChange={(event) => setDraftFilters({ ...draftFilters, branchId: event.target.value })}
+            className="h-12 max-w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3 text-sm"
+          >
+            <option value="">Todas las sucursales</option>
+            {branches.data?.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <Button type="submit" disabled={resource.loading}>
           <Search size={16} aria-hidden="true" />
           Buscar
@@ -138,6 +187,8 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
             setSearch("");
             setEmail("");
             setPage(0);
+            setFilters({ role: "", active: "", branchId: "" });
+            setDraftFilters({ role: "", active: "", branchId: "" });
             resource.refresh();
           }}
         >

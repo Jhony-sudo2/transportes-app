@@ -3,11 +3,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { readFleetResponse } from "@/lib/fleet-ui";
-import {
-  DriverOperationSchema,
-  type DriverOperationReference,
-  type DriverOperation,
-} from "@/lib/validators/fleet-resources";
+import { DriverOperationSchema } from "@/lib/validators/fleet-resources";
+import type { DriverOperationReference, DriverOperation } from "@/types/fleet";
 export function DriverRegistrationStatus({
   reference,
   onNew,

@@ -63,6 +63,3 @@ export const AccountProfileSchema = z
 export const AccountProfileOperationSchema = DriverOperationSchema.extend({
   action: z.literal("UPDATE"),
 });
-export type AccountProfile = z.infer<typeof AccountProfileSchema>;
-export type AccountProfileRequest = z.infer<typeof AccountProfileRequestSchema>;
-export type AccountPasswordRequest = z.infer<typeof AccountPasswordRequestSchema>;

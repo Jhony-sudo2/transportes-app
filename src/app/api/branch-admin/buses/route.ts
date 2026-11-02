@@ -11,6 +11,7 @@ import { fleetRequest } from "@/lib/api/fleet";
 import { CreateBusSchema, CreatedBusSchema } from "@/lib/validators/fleet-resources";
 import { ApplicationError } from "@/types/error";
 import { readBusMultipart, busMultipart } from "@/lib/api/bus-multipart";
+import { getBusTypeForUnit } from "@/lib/api/bus-types";
 export async function POST(request: NextRequest) {
   try {
     if (request.headers.get("origin") !== request.nextUrl.origin)
@@ -24,10 +25,30 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     const { token, branchId } = await requireSelectedBranch(parsed.data.branchId, workspace);
+    const type = await getBusTypeForUnit(
+      token,
+      parsed.data.busTypeId,
+      parsed.data.seatRows,
+      parsed.data.seatColumns,
+    );
     const bus = validatedFleetResult(
       CreatedBusSchema,
-      await fleetRequest("buses", token, busMultipart({ ...parsed.data, branchId }, photo)),
+      await fleetRequest(
+        "buses",
+        token,
+        busMultipart({ ...parsed.data, branchId, capacity: type.capacity }, photo),
+      ),
     );
+    if (
+      bus.busTypeId !== type.id ||
+      bus.capacity !== type.capacity ||
+      bus.rentalEnabled !== parsed.data.rentalEnabled
+    )
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "La respuesta no confirma el tipo, capacidad y habilitación de alquiler del bus. Consulta el listado antes de repetir el alta.",
+      );
     return NextResponse.json({ bus, branchId }, { status: 201 });
   } catch (error) {
     return adminErrorResponse(error);

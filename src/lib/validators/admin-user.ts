@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AdminRole, StaffCreatedResponse } from "@/types/admin-user";
 import { TransportRegisterRequestSchema, TransportUserSchema } from "./auth";
 import { ManagedBranchIdSchema } from "./branch-context";
 export const ADMIN_ROLE_LABELS: Record<string, string> = {
@@ -13,7 +14,7 @@ export const CreatableRoleSchema = z
   .number()
   .int()
   .refine(
-    (id) => [1, 2, 3, 5].includes(id),
+    (id) => [1, 3, 5].includes(id),
     "Selecciona un rol válido; los choferes se registran desde Fleet",
   );
 export const AdminRoleSchema = z.object({
@@ -25,7 +26,49 @@ export const CreateAdminUserSchema = z.object({
   person: TransportRegisterRequestSchema.shape.person,
   email: z.string().trim().email("Correo electrónico inválido").max(255),
   roleId: CreatableRoleSchema,
+  branchIds: z.array(ManagedBranchIdSchema).default([]),
 });
+export const CreateStaffUserSchema = CreateAdminUserSchema.strict().superRefine((data, context) => {
+  if ([3, 5].includes(data.roleId) && data.branchIds.length === 0)
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["branchIds"],
+      message: "Asigna al menos una sucursal al usuario.",
+    });
+  if (data.roleId === 5 && data.branchIds.length !== 1)
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["branchIds"],
+      message: "Selecciona una única sucursal para el cajero.",
+    });
+  if (new Set(data.branchIds).size !== data.branchIds.length)
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["branchIds"],
+      message: "No repitas sucursales.",
+    });
+});
+const roleIds = { ADMIN: 1, CUSTOMER: 2, SUCURSAL_ADMIN: 3, DRIVER: 4, CASHIER: 5 } as const;
+export const StaffRoleSchema = z.enum(["ADMIN", "CUSTOMER", "SUCURSAL_ADMIN", "DRIVER", "CASHIER"]);
+export const StaffCreatedSchema = z.object({
+  userId: ManagedBranchIdSchema,
+  role: StaffRoleSchema,
+  branchIds: z.array(ManagedBranchIdSchema),
+}) satisfies z.ZodType<StaffCreatedResponse, z.ZodTypeDef, unknown>;
+export const StaffUserSchema = StaffCreatedSchema.extend({
+  name: z.string(),
+  lastName: z.string(),
+  email: z.string().email(),
+  active: z.boolean(),
+}).transform((user) => ({
+  id: user.userId,
+  name: user.name,
+  lastName: user.lastName,
+  email: user.email,
+  isActive: user.active,
+  branchIds: user.branchIds,
+  role: { id: roleIds[user.role], name: user.role === "CASHIER" ? ("CAJERO" as const) : user.role },
+}));
 export const CreatedAdminUserSchema = TransportUserSchema.pick({
   id: true,
   name: true,
@@ -47,10 +90,16 @@ export const AdminUsersPageSchema = z.object({
 export const AdminUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(0).max(2147483647).default(0),
   email: z.string().trim().max(255).default(""),
+  role: StaffRoleSchema.optional(),
+  active: z.enum(["true", "false"]).optional(),
+  branchId: z.coerce.number().int().positive().safe().optional(),
+});
+export const StaffUserResultSchema = z.union([StaffUserSchema, AdminUserSchema]);
+export const StaffUsersPageSchema = AdminUsersPageSchema.extend({
+  content: z.array(StaffUserResultSchema),
 });
 export const AssignAdminBranchSchema = z.object({ branchId: ManagedBranchIdSchema }).strict();
 export const AdminBranchIdsSchema = z.array(ManagedBranchIdSchema);
-export type AdminUser = z.infer<typeof AdminUserSchema>;
 export const AdminUserAvailabilitySchema = z.object({ isActive: z.boolean() }).strict();
 export const AdminUserAvailabilityResponseSchema = z.object({
   user: AdminUserSchema,
@@ -62,9 +111,6 @@ export const CreateBranchCashierSchema = CreateAdminUserSchema.pick({
 })
   .extend({ branchId: ManagedBranchIdSchema })
   .strict();
-export type CreateAdminUser = z.infer<typeof CreateAdminUserSchema>;
-export type AdminRole = z.infer<typeof AdminRoleSchema>;
-export type CreatedAdminUser = z.infer<typeof CreatedAdminUserSchema>;
 export function isCreatableRole(role: AdminRole): boolean {
   return CreatableRoleSchema.safeParse(role.id).success && role.name !== "DRIVER";
 }

@@ -11,7 +11,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useCustomerData, readCustomerResponse } from "@/hooks/useCustomerData";
-import { AdminBranchIdsSchema, type AdminUser } from "@/lib/validators/admin-user";
+import { AdminBranchIdsSchema } from "@/lib/validators/admin-user";
+import type { AdminUser } from "@/types/admin-user";
 import { BranchListSchema } from "@/lib/validators/branch";
 import { CustomerDataState } from "./CustomerDataState";
 

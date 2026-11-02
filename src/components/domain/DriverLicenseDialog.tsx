@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { z } from "zod";
+import type { DriverLicense, DriverLicenseContext } from "@/types/fleet";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +25,7 @@ import {
 
 export function DriverLicenseDialog({ driver, branchId, actions }: DriverDialogProps) {
   const dialog = useDriverDialog(actions.refresh);
-  const [context, setContext] = useState<z.infer<typeof DriverLicenseContextSchema> | null>(null);
+  const [context, setContext] = useState<DriverLicenseContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -35,7 +35,7 @@ export function DriverLicenseDialog({ driver, branchId, actions }: DriverDialogP
     reset,
     setError,
     formState: { errors },
-  } = useForm<z.infer<typeof DriverLicenseFormSchema>>({
+  } = useForm<DriverLicense>({
     resolver: zodResolver(DriverLicenseFormSchema),
   });
 
@@ -75,7 +75,7 @@ export function DriverLicenseDialog({ driver, branchId, actions }: DriverDialogP
     return () => controller.abort();
   }, [dialog.open, driver.id, branchId, retry, reset]);
 
-  function submit(data: z.infer<typeof DriverLicenseFormSchema>) {
+  function submit(data: DriverLicense) {
     if (!context) return;
     if (data.expirationDate < context.license.expirationDate) {
       setError("expirationDate", {

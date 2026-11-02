@@ -7,11 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/layout/AuthFrame";
-import {
-  TransportPasswordTokenSchema,
-  TransportResetPasswordSchema,
-  type TransportResetPassword,
-} from "@/lib/validators/auth";
+import { TransportPasswordTokenSchema, TransportResetPasswordSchema } from "@/lib/validators/auth";
+import type { TransportResetPassword } from "@/types/auth";
 
 export function PasswordSetupForm({ mode }: { mode: "first-login" | "recovery" }) {
   const firstLogin = mode === "first-login";

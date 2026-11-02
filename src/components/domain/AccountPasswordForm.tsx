@@ -5,10 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { FleetField } from "./FleetField";
 import { useBranchWorkspace } from "@/components/layout/BranchWorkspaceProvider";
-import {
-  AccountPasswordRequestSchema,
-  type AccountPasswordRequest,
-} from "@/lib/validators/account";
+import { AccountPasswordRequestSchema } from "@/lib/validators/account";
+import type { AccountPasswordRequest } from "@/types/account";
 import { readFleetResponse } from "@/lib/fleet-ui";
 
 export function AccountPasswordForm() {

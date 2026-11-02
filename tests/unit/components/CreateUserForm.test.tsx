@@ -1,24 +1,38 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CreateUserForm } from "@/components/domain/CreateUserForm";
 const roles = [
   { id: 1, name: "ADMIN" },
-  { id: 2, name: "CUSTOMER" },
   { id: 3, name: "SUCURSAL_ADMIN" },
   { id: 5, name: "CAJERO" },
 ];
-describe("Formulario de creacion administrativa", () => {
-  const fetchMock = vi.fn();
+const record = {
+  id: 8,
+  name: "Juan",
+  lastName: "Perez",
+  email: "juan@example.com",
+  role: { id: 5, name: "CAJERO" },
+};
+describe("Formulario administrativo con asignación de sucursal", () => {
+  const fetchMock = vi.fn(),
+    save = vi.fn();
   beforeEach(() => {
-    fetchMock.mockReset();
+    vi.resetAllMocks();
     vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (options?.method === "POST") return save(url, options);
+      return Response.json(url.endsWith("/roles") ? roles : [{ id: 2, name: "Central" }]);
+    });
+    save.mockImplementation(async () =>
+      Response.json({ status: "created", user: record }, { status: 201 }),
+    );
   });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
   });
-  async function complete() {
+  async function complete(branch = true) {
     const user = userEvent.setup();
     await screen.findByRole("option", { name: "Cajero" });
     for (const [name, value] of [
@@ -30,106 +44,44 @@ describe("Formulario de creacion administrativa", () => {
       ["Dirección", "Guatemala"],
       ["Correo electrónico", "juan@example.com"],
     ])
-      await user.type(screen.getByLabelText(name as string), value as string);
-    await user.selectOptions(screen.getByRole("combobox"), "5");
+      await user.type(screen.getByLabelText(String(name)), String(value));
+    await user.selectOptions(screen.getByLabelText("Rol del usuario"), "5");
+    if (branch) await user.selectOptions(screen.getByLabelText("Sucursal del cajero"), "2");
     await user.click(screen.getByRole("button", { name: /^Crear usuario$/ }));
   }
-  it("envia los datos del cajero sin contrasena y confirma la creacion", async () => {
-    fetchMock.mockResolvedValueOnce(Response.json(roles)).mockResolvedValueOnce(
-      Response.json(
-        {
-          status: "created",
-          user: {
-            id: 8,
-            name: "Juan",
-            lastName: "Perez",
-            email: "juan@example.com",
-            role: { id: 5, name: "CAJERO" },
-          },
-        },
-        { status: 201 },
-      ),
-    );
+  it("envía un cajero con su única sucursal y sin contraseña", async () => {
     render(<CreateUserForm />);
     await complete();
     expect(await screen.findByRole("heading", { name: "Usuario creado" })).toBeInTheDocument();
-    const sent = JSON.parse(fetchMock.mock.calls[1]?.[1].body);
-    expect(sent).toEqual({
-      person: {
-        name: "Juan",
-        lastName: "Perez",
-        dpi: "1234567890123",
-        nit: "1234567",
-        phone: "55555555",
-        adress: "Guatemala",
-      },
-      email: "juan@example.com",
-      roleId: 5,
-    });
-    expect(sent).not.toHaveProperty("password");
+    const data = JSON.parse(save.mock.calls[0]?.[1].body);
+    expect(data).toMatchObject({ roleId: 5, branchIds: [2], email: record.email });
+    expect(data).not.toHaveProperty("password");
+    expect(save).toHaveBeenCalledTimes(1);
   });
-  it("conserva los datos para corregir un conflicto del servicio", async () => {
-    fetchMock
-      .mockResolvedValueOnce(Response.json(roles))
-      .mockResolvedValueOnce(Response.json({ detail: "El DPI ya existe" }, { status: 409 }));
+  it("requiere sucursal antes de crear al cajero", async () => {
+    render(<CreateUserForm />);
+    await complete(false);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Asigna sucursales");
+    expect(save).not.toHaveBeenCalled();
+  });
+  it("conserva datos para corregir un rechazo conocido", async () => {
+    save.mockImplementation(async () =>
+      Response.json({ detail: "El DPI ya existe" }, { status: 409 }),
+    );
     render(<CreateUserForm />);
     await complete();
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("El DPI ya existe"));
-    expect(screen.getByLabelText("Correo electrónico")).toHaveValue("juan@example.com");
-    expect(screen.queryByRole("heading", { name: "Usuario creado" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("El DPI ya existe");
+    expect(screen.getByLabelText("Correo electrónico")).toHaveValue(record.email);
+    expect(screen.getByRole("button", { name: /^Crear usuario$/ })).toBeEnabled();
   });
-  async function completeCashier() {
-    const user = userEvent.setup();
-    for (const [name, value] of [
-      ["Nombre", "Juan"],
-      ["Apellido", "Perez"],
-      ["DPI", "1234567890123"],
-      ["NIT", "1234567"],
-      ["Teléfono", "55555555"],
-      ["Dirección", "Guatemala"],
-      ["Correo electrónico", "juan@example.com"],
-    ])
-      await user.type(screen.getByLabelText(name as string), value as string);
-    await user.click(screen.getByRole("button", { name: /^Crear cajero$/ }));
-  }
-  it("reutiliza los datos personales con rol fijo y sin consultar el catálogo de admin", async () => {
-    fetchMock.mockResolvedValueOnce(
-      Response.json(
-        {
-          user: {
-            id: 8,
-            name: "Juan",
-            lastName: "Perez",
-            email: "juan@example.com",
-            role: { id: 5, name: "CAJERO" },
-          },
-          branchId: 2,
-        },
-        { status: 201 },
-      ),
+  it("impide reenviar cuando se desconoce si la cuenta fue creada", async () => {
+    save.mockRejectedValueOnce(new Error("Conexión interrumpida"));
+    render(<CreateUserForm />);
+    await complete();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Crear usuario$/ })).toBeDisabled(),
     );
-    render(<CreateUserForm cashierBranch={{ id: 2, name: "Central" }} />);
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
-    await completeCashier();
-    expect(await screen.findByRole("heading", { name: "Cajero creado" })).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, options] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe("/api/branch-admin/cashiers");
-    expect(JSON.parse(options.body)).toMatchObject({ branchId: 2, email: "juan@example.com" });
-    expect(JSON.parse(options.body)).not.toHaveProperty("roleId");
-    expect(JSON.parse(options.body)).not.toHaveProperty("password");
-    await userEvent.click(screen.getByRole("button", { name: "Crear otro cajero" }));
-    expect(screen.getByLabelText("Nombre")).toHaveValue("");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-  it("bloquea el reenvío cuando no se sabe si la cuenta fue creada", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("Conexión interrumpida"));
-    render(<CreateUserForm cashierBranch={{ id: 2, name: "Central" }} />);
-    await completeCashier();
-    expect(await screen.findByRole("alert")).toHaveTextContent("Verifica si la cuenta fue creada");
-    expect(screen.getByRole("button", { name: /^Crear cajero$/ })).toBeDisabled();
-    expect(screen.getByLabelText("Correo electrónico")).toHaveValue("juan@example.com");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: /Consulta el listado/ })).toBeInTheDocument();
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });

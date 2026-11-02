@@ -2,13 +2,35 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { ApplicationError } from "@/types/error";
+import type { UpstreamErrorContext } from "@/types/error";
+export async function readUpstreamProblem(
+  response: Response,
+  fallback: string,
+): Promise<{ detail: string; upstream: UpstreamErrorContext }> {
+  const upstream: UpstreamErrorContext = {};
+  let detail = fallback;
+  try {
+    const raw: unknown = await response.json();
+    if (raw && typeof raw === "object") {
+      const message = "detail" in raw ? raw.detail : "message" in raw ? raw.message : null;
+      if (response.status < 500 && typeof message === "string" && message.trim())
+        detail = message.trim().slice(0, 1000);
+      if ("code" in raw && typeof raw.code === "string" && raw.code.length <= 128)
+        upstream.code = raw.code;
+      if (
+        "correlationId" in raw &&
+        typeof raw.correlationId === "string" &&
+        raw.correlationId.length <= 128
+      )
+        upstream.correlationId = raw.correlationId;
+    }
+  } catch {
+    /* Conservar el mensaje general ante una respuesta no válida. */
+  }
+  return { detail, upstream };
+}
 
-function problemJson(
-  status: number,
-  code: string,
-  title: string,
-  detail?: string,
-): NextResponse {
+function problemJson(status: number, code: string, title: string, detail?: string): NextResponse {
   return NextResponse.json(
     { code, title, detail: detail ?? title, status },
     {
@@ -44,5 +66,14 @@ export function internalErrorResponse(): NextResponse {
 }
 
 export function applicationErrorResponse(error: ApplicationError): NextResponse {
-  return problemJson(error.status, error.code, error.detail, error.detail);
+  return NextResponse.json(
+    {
+      code: error.upstream?.code ?? error.code,
+      title: error.detail,
+      detail: error.detail,
+      status: error.status,
+      ...(error.upstream?.correlationId ? { correlationId: error.upstream.correlationId } : {}),
+    },
+    { status: error.status, headers: { "Content-Type": "application/problem+json" } },
+  );
 }

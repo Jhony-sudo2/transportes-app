@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ReportTable, type Column } from "./ReportTable";
 import { Button } from "@/components/ui/button";
-export function CustomerRecordsTable<T extends { id: number } & Record<string, unknown>>({
+export function CustomerRecordsTable<T extends { id: number }>({
   items,
   columns,
   caption,

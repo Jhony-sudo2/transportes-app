@@ -40,16 +40,16 @@ describe("Activar y desactivar cuentas desde ADMIN", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
   it.each([true, false])(
-    "solicita isActive=%s al endpoint vigente con PUT sin cuerpo",
+    "solicita isActive=%s al contrato de personal con PATCH",
     async (isActive) => {
       mocks.fetch.mockResolvedValueOnce(Response.json({ ...target, isActive }));
       const response = await PATCH(request({ isActive }), context());
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ user: { ...target, isActive }, signedOut: false });
       const [url, options] = mocks.fetch.mock.calls[0]!;
-      expect(url).toMatch(new RegExp(`/users/9/${isActive ? "activate" : "deactivate"}$`));
-      expect(options.method).toBe("PUT");
-      expect(options.body).toBeUndefined();
+      expect(url).toMatch(/users\/staff\/9$/);
+      expect(options.method).toBe("PATCH");
+      expect(JSON.parse(options.body)).toEqual({ active: isActive });
       expect(options.headers.Authorization).toBe("Bearer admin-token");
       expect(mocks.fetch).toHaveBeenCalledTimes(1);
       expect(mocks.remove).not.toHaveBeenCalled();

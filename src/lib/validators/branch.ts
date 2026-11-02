@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Branch, Coordinate } from "@/types/branch";
 export const LatitudeSchema = z
   .number({ invalid_type_error: "Selecciona una ubicación válida" })
   .finite()
@@ -10,7 +11,6 @@ export const LongitudeSchema = z
   .min(-180, "Longitud fuera de rango")
   .max(180, "Longitud fuera de rango");
 export const CoordinateSchema = z.object({ latitude: LatitudeSchema, longitude: LongitudeSchema });
-export type Coordinate = z.infer<typeof CoordinateSchema>;
 const text = z.string().trim().min(1, "Este campo es obligatorio");
 export const CreateBranchSchema = z.object({
   name: text.max(255),
@@ -37,14 +37,12 @@ export const BranchSchema = z.object({
   municipalityName: z.string().nullish(),
   departamentName: z.string().nullish(),
   indication: z.string().nullish(),
+  active: z.boolean().optional(),
 });
 export const BranchListSchema = z.array(BranchSchema);
 export const LocationListSchema = z.array(
   z.object({ id: z.number().int().positive(), name: z.string() }),
 );
-export type CreateBranch = z.infer<typeof CreateBranchSchema>;
-export type Branch = z.infer<typeof BranchSchema>;
-export type Location = z.infer<typeof LocationListSchema>[number];
 export function getBranchCoordinate(branch: Branch): Coordinate | null {
   const result = CoordinateSchema.safeParse(branch);
   return result.success ? result.data : null;

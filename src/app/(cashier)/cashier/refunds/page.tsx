@@ -1,5 +1,7 @@
-import { CashierRefunds } from "@/components/domain/CashierRefunds";
-export default function CashierRefundsPage() {
+import { CashRefunds } from "@/components/domain/CommerceRefunds";
+import { requireTransportPageAccess } from "@/lib/auth/page-access";
+export default async function CashierRefundsPage() {
+  const user = await requireTransportPageAccess("CAJERO");
   return (
     <section className="mx-auto max-w-6xl space-y-7 px-5 py-10 md:px-8 md:py-12">
       <div>
@@ -8,10 +10,11 @@ export default function CashierRefundsPage() {
           Devoluciones presenciales
         </h1>
         <p className="mt-3 text-sm leading-6 text-[var(--tg-muted)]">
-          Busca la factura para atender al comprador, tenga o no una cuenta en la aplicación.
+          Consulta el código exacto del comprobante para atender al comprador, tenga o no cuenta. La
+          caja pagadora puede ser distinta de la sucursal de compra.
         </p>
       </div>
-      <CashierRefunds />
+      <CashRefunds userId={user.id} />
     </section>
   );
 }

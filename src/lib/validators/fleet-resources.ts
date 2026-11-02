@@ -11,13 +11,23 @@ export const BusFormSchema = z.object({
   plateNumber: required.max(255),
   brand: required.max(255),
   color: required.max(255),
-  model: integer.min(1980, "El modelo debe ser de 1980 en adelante").max(9999),
+  model: required.max(100),
   year_manufacture: integer.max(9999),
   seatRows: integer.max(30, "Se permiten hasta 30 filas"),
   seatColumns: integer.max(6, "Se permiten hasta 6 columnas"),
-  currentKm: integer,
+  currentKm: z.number().int().nonnegative().max(2147483647),
+  busTypeId: ManagedBranchIdSchema,
+  rentalEnabled: z.boolean(),
+  stateId: ManagedBranchIdSchema.optional(),
 });
-export const CreateBusSchema = BusFormSchema.transform((data) => ({
+export const CreateBusSchema = BusFormSchema.superRefine((data, context) => {
+  if (!data.stateId)
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["stateId"],
+      message: "Selecciona el estado inicial del bus.",
+    });
+}).transform((data) => ({
   ...data,
   capacity: data.seatRows * data.seatColumns,
 }));
@@ -39,6 +49,8 @@ export const UpdateBusSchema = z
     capacity: integer,
     seatRows: BusFormSchema.shape.seatRows,
     seatColumns: BusFormSchema.shape.seatColumns,
+    busTypeId: ManagedBranchIdSchema,
+    rentalEnabled: z.boolean(),
   })
   .strict();
 export const CreatedBusSchema = z.object({
@@ -48,12 +60,14 @@ export const CreatedBusSchema = z.object({
   model: z.union([z.string(), z.number()]).transform(String),
   yearManufacture: z.number().int(),
   capacity: integer,
-  currentKm: integer,
+  currentKm: z.number().int().nonnegative().max(2147483647),
   seatRows: integer.max(30),
   seatColumns: integer.max(6),
   state: z.string(),
   photo: z.string().nullish(),
   color: z.string().nullish(),
+  busTypeId: ManagedBranchIdSchema.nullish(),
+  rentalEnabled: z.boolean().optional(),
 });
 const localDate = z
   .string()
@@ -74,7 +88,7 @@ export const CreateDriverSchema = z.object({
   baseSalary: z
     .number({ invalid_type_error: "Ingresa un salario válido" })
     .finite()
-    .positive("El salario debe ser mayor que cero"),
+    .nonnegative("El salario no puede ser negativo"),
   license: z.object({
     number: required.max(255),
     expirationDate: localDate,
@@ -84,6 +98,7 @@ export const CreateDriverSchema = z.object({
 export const LicenseTypeListSchema = z.array(
   z.object({ id: ManagedBranchIdSchema, name: required }),
 );
+export const BusStateListSchema = z.array(z.object({ id: ManagedBranchIdSchema, name: required }));
 export const DriverOperationIdSchema = z.string().uuid("Identificador de operación inválido");
 export const CreatedDriverSchema = z
   .object({
@@ -165,8 +180,6 @@ export const DriverLicenseContextSchema = z.object({
 });
 export const BusListSchema = z.array(BusListRecordSchema);
 export const DriverListSchema = z.array(DriverListRecordSchema);
-export type BusListRecord = z.infer<typeof BusListRecordSchema>;
-export type DriverListRecord = z.infer<typeof DriverListRecordSchema>;
 export const MAX_DRIVER_PHOTO_BYTES = 1024 * 1024;
 export function fleetPhotoError(photo: { size: number; type: string } | null): string | null {
   if (!photo || photo.size === 0) return "Selecciona una fotografía.";
@@ -174,9 +187,3 @@ export function fleetPhotoError(photo: { size: number; type: string } | null): s
   return photo.size > MAX_DRIVER_PHOTO_BYTES ? "La fotografía debe pesar como máximo 1 MB." : null;
 }
 export const driverPhotoError = fleetPhotoError;
-export type BusFormData = z.infer<typeof BusFormSchema>;
-export type DriverFormData = z.infer<typeof CreateDriverSchema>;
-export type CreatedBus = z.infer<typeof CreatedBusSchema>;
-export type CreatedDriver = z.infer<typeof CreatedDriverSchema>;
-export type DriverOperationReference = z.infer<typeof DriverOperationReferenceSchema>;
-export type DriverOperation = z.infer<typeof DriverOperationSchema>;

@@ -2,7 +2,11 @@ import "server-only";
 import { cookies } from "next/headers";
 import { getTransportSession } from "@/lib/auth/session";
 import { ApplicationError } from "@/types/error";
-import { applicationErrorResponse, internalErrorResponse } from "@/lib/api/responses";
+import {
+  applicationErrorResponse,
+  internalErrorResponse,
+  readUpstreamProblem,
+} from "@/lib/api/responses";
 export async function requireAdminAccess() {
   const user = await getTransportSession();
   if (!user || !user.isActive)
@@ -17,6 +21,9 @@ export async function requireAdminAccess() {
 export async function adminRequest(
   path:
     | "users"
+    | "users/staff"
+    | `users/staff?${string}`
+    | `users/staff/${number}`
     | "roles"
     | "users/cashiers"
     | `users?${string}`
@@ -26,11 +33,12 @@ export async function adminRequest(
     | "users/branch-administrators",
   token: string,
   body?: unknown,
-  method: "GET" | "POST" | "PUT" = body === undefined ? "GET" : "POST",
+  method: "GET" | "POST" | "PUT" | "PATCH" = body === undefined ? "GET" : "POST",
 ): Promise<unknown> {
   const base = (process.env["GATEWAY_URL"] ?? "http://localhost:8080").replace(/\/$/, "");
   const assignment = path === "users/branch-administrators";
-  const statusChange = /^users\/\d+\/(activate|deactivate)$/.test(path);
+  const statusChange =
+    /^users\/\d+\/(activate|deactivate)$/.test(path) || /^users\/staff\/\d+$/.test(path);
   const uncertainAssignment =
     "No se pudo confirmar la asignación. Actualiza las sucursales del usuario antes de volver a enviarla.";
   let response: Response;
@@ -50,45 +58,32 @@ export async function adminRequest(
     throw new ApplicationError(
       "system.internal_error",
       502,
-      assignment ? uncertainAssignment : "No se pudo conectar al servicio de usuarios.",
+      assignment
+        ? uncertainAssignment
+        : statusChange
+          ? "No se pudo confirmar la actualización. Actualiza el listado antes de volver a intentarlo."
+          : "No se pudo conectar al servicio de usuarios.",
     );
   }
   if (!response.ok) {
-    let detail =
-      response.status === 409
-        ? "Ya existe una cuenta o persona con ese correo, DPI o NIT. Revisa los datos."
+    const fallback =
+      response.status >= 500 && (assignment || statusChange)
+        ? "No se pudo confirmar la actualización. Actualiza el listado antes de volver a intentarlo."
         : response.status === 401
           ? "Tu sesión ha vencido. Inicia sesión nuevamente."
           : response.status === 403
             ? "No tienes permiso para realizar esta operación."
-            : response.status === 400
-              ? "Los datos no fueron aceptados. Revisa los campos y el rol seleccionado."
-              : "El servicio de usuarios no pudo completar la operación.";
-    if (assignment || statusChange) {
-      if (response.status >= 500)
-        detail = assignment
-          ? uncertainAssignment
-          : "No se pudo confirmar el cambio de estado. Actualiza el listado antes de volver a intentarlo.";
-      else if (statusChange) detail = "El servicio rechazó el cambio de estado de la cuenta.";
-      else if (response.status === 409)
-        detail = "El servicio rechazó la asignación de esta sucursal al administrador.";
-      if (response.status === 400 || response.status === 409 || response.status === 422) {
-        try {
-          const problem: unknown = await response.json();
-          if (problem && typeof problem === "object") {
-            const message =
-              "detail" in problem ? problem.detail : "message" in problem ? problem.message : null;
-            if (typeof message === "string" && message.trim()) detail = message.slice(0, 1000);
-          }
-        } catch {
-          /* Conserva el mensaje general. */
-        }
-      }
-    }
+            : response.status === 409
+              ? "Ya existe una cuenta o persona con ese correo, DPI o NIT. Revisa los datos."
+              : response.status === 400
+                ? "Los datos no fueron aceptados. Revisa los campos y el rol seleccionado."
+                : "El servicio de usuarios no pudo completar la operación.";
+    const problem = await readUpstreamProblem(response, fallback);
     throw new ApplicationError(
       response.status === 409 ? "resource.conflict" : "system.internal_error",
       response.status,
-      detail,
+      problem.detail,
+      problem.upstream,
     );
   }
   if (assignment) {

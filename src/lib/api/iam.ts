@@ -135,6 +135,10 @@ export async function transportRequest(
     | "auth/login"
     | "auth/login/tfa"
     | "auth/register"
+    | "auth/email-confirm"
+    | "auth/email-verification/resend"
+    | "users/profile/email-change"
+    | "users/profile/email-confirm"
     | "users/profile"
     | `users/${number}/branches`
     | "auth/forgot-password"
@@ -162,28 +166,59 @@ export async function transportRequest(
     );
   }
   if (!response.ok) {
+    let message: string | undefined;
+    let code: string | undefined;
+    let correlationId: string | undefined;
+    try {
+      const problem = z
+        .object({
+          detail: z.string().optional(),
+          message: z.string().optional(),
+          code: z.string().max(128).optional(),
+          correlationId: z.string().max(128).optional(),
+        })
+        .parse(await response.json());
+      if (response.status < 500)
+        message = (problem.detail || problem.message)?.trim().slice(0, 1000);
+      code = problem.code;
+      correlationId = problem.correlationId;
+    } catch {
+      /* Mantener mensaje general sin exponer respuestas no verificadas. */
+    }
     throw new ApplicationError(
       response.status === 401 ? "auth.invalid_credentials" : "system.internal_error",
       response.status,
-      path === "users/reset-password"
-        ? "No se pudo restablecer la contraseña. El enlace puede haber vencido o ya fue utilizado. Solicita uno nuevo."
-        : path === "auth/forgot-password"
-          ? "No se pudo solicitar el correo de recuperación. Inténtalo de nuevo."
-          : path === "auth/register"
-            ? response.status === 409
-              ? "Ya existe una cuenta con esos datos. Revisa tu correo, DPI y NIT."
-              : response.status === 400
-                ? "No se pudo registrar la cuenta. Revisa los datos ingresados."
-                : "No se pudo crear la cuenta. Inténtalo de nuevo."
-            : response.status === 401
-              ? "Credenciales o código incorrectos."
-              : response.status === 403
-                ? "Acceso rechazado. Comprueba que tu cuenta esté activa."
+      message ||
+        (path === "users/reset-password"
+          ? "No se pudo restablecer la contraseña. El enlace puede haber vencido o ya fue utilizado. Solicita uno nuevo."
+          : path === "auth/forgot-password"
+            ? "No se pudo solicitar el correo de recuperación. Inténtalo de nuevo."
+            : path === "auth/register"
+              ? response.status === 409
+                ? "Ya existe una cuenta con esos datos. Revisa tu correo, DPI y NIT."
                 : response.status === 400
-                  ? "Datos o código de verificación inválidos."
-                  : "El servicio no pudo completar la solicitud.",
+                  ? "No se pudo registrar la cuenta. Revisa los datos ingresados."
+                  : "No se pudo crear la cuenta. Inténtalo de nuevo."
+              : response.status === 401
+                ? "Credenciales o código incorrectos."
+                : response.status === 403
+                  ? "Acceso rechazado. Comprueba que tu cuenta esté activa."
+                  : response.status === 400
+                    ? "Datos o código de verificación inválidos."
+                    : response.status === 410
+                      ? "El enlace ha vencido. Solicita uno nuevo."
+                      : "El servicio no pudo completar la solicitud."),
+      { ...(code ? { code } : {}), ...(correlationId ? { correlationId } : {}) },
     );
   }
   if (response.status === 204) return null;
-  return response.json();
+  try {
+    return await response.json();
+  } catch {
+    throw new ApplicationError(
+      "system.internal_error",
+      502,
+      "No se pudo verificar la respuesta del servicio. Consulta el estado antes de repetir la operación.",
+    );
+  }
 }

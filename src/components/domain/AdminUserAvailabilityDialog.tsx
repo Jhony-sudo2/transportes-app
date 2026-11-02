@@ -10,7 +10,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { readCustomerResponse } from "@/hooks/useCustomerData";
-import { AdminUserAvailabilityResponseSchema, type AdminUser } from "@/lib/validators/admin-user";
+import { AdminUserAvailabilityResponseSchema } from "@/lib/validators/admin-user";
+import type { AdminUser } from "@/types/admin-user";
 
 export function AdminUserAvailabilityDialog({
   user,

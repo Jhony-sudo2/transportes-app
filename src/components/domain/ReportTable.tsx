@@ -6,14 +6,14 @@ export interface Column<T> {
   render?: (value: T[keyof T], row: T) => React.ReactNode;
 }
 
-interface ReportTableProps<T extends Record<string, unknown>> {
+interface ReportTableProps<T extends object> {
   columns: Column<T>[];
   data: T[];
   caption?: string;
   getRowKey?: (row: T) => string | number;
 }
 
-export function ReportTable<T extends Record<string, unknown>>({
+export function ReportTable<T extends object>({
   columns,
   data,
   caption,

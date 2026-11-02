@@ -1,4 +1,4 @@
-import type { BusListRecord, DriverListRecord } from "@/lib/validators/fleet-resources";
+import type { BusListRecord, DriverListRecord } from "@/types/fleet";
 
 export type FleetAvailability = { active: boolean | null; reason: string };
 

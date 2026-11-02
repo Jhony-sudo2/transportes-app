@@ -193,7 +193,7 @@ const api = http.createServer(async (request, response) => {
       return;
     }
     if (++operation.reads > 1 && operation.status === "PENDING") {
-      if (operation.data.nit === "DUPLICADO") {
+      if (operation.data.name === "Propuesta rechazada") {
         operation.status = "REJECTED";
         operation.failureReason = "El NIT pertenece a otra cuenta.";
         driver.updateFailureReason = operation.failureReason;
@@ -381,7 +381,7 @@ try {
       });
       await expect(page.getByLabel("DPI", { exact: true })).not.toHaveAttribute("readonly");
       await page.getByLabel("Nombre", { exact: true }).fill("Propuesta rechazada");
-      await page.getByLabel("NIT", { exact: true }).fill("DUPLICADO");
+      await expect(page.getByLabel("NIT", { exact: true })).toHaveAttribute("readonly", "");
       await page.getByRole("button", { name: "Enviar cambios", exact: true }).evaluate((button) => {
         button.click();
         button.click();
@@ -409,7 +409,7 @@ try {
         buffer: photoBytes,
       });
       await page.getByLabel("Nombre", { exact: true }).fill("Conductor actualizado");
-      await page.getByLabel("NIT", { exact: true }).fill("NIT-NUEVO");
+      await expect(page.getByLabel("NIT", { exact: true })).toHaveValue(user.nit);
       await page.getByLabel("Teléfono", { exact: true }).fill("55550000");
       await page.getByLabel("Dirección", { exact: true }).fill("Direccion actualizada");
       await page.getByRole("button", { name: "Enviar cambios", exact: true }).click();
@@ -483,9 +483,11 @@ try {
       await expect(twoFactor).toBeChecked();
       await twoFactor.uncheck();
       await page.getByLabel("Nombre", { exact: true }).fill("Actualizado " + role);
-      await page
-        .getByLabel("Correo electrónico", { exact: true })
-        .fill("nuevo_" + role.toLowerCase() + "@example.com");
+      await expect(page.getByLabel("Correo electrónico", { exact: true })).toHaveAttribute(
+        "readonly",
+        "",
+      );
+      await expect(page.getByLabel("NIT", { exact: true })).toHaveAttribute("readonly", "");
       await page.getByLabel("Dirección", { exact: true }).fill("Direccion actualizada");
       await page
         .getByRole("button", { name: "Guardar cambios", exact: true })

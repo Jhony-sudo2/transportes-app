@@ -125,6 +125,18 @@ export async function PUT(request: NextRequest) {
         { status: 400 },
       );
     const data = parsed.data;
+    if (data.nit !== (access.user.nit ?? ""))
+      throw new ApplicationError(
+        "validation.failed",
+        400,
+        "El NIT es permanente y no puede cambiarse desde el perfil.",
+      );
+    if (data.email !== access.user.email)
+      throw new ApplicationError(
+        "validation.failed",
+        400,
+        "Solicita el cambio de correo y verifica la nueva dirección desde la opción de correo electrónico.",
+      );
     if (driverRole) {
       const driver = await getOwnDriver(access);
       if (driver.pendingOperationId || !["ACTIVE", "INACTIVE"].includes(driver.status ?? ""))

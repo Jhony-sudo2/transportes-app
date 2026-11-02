@@ -17,8 +17,8 @@ import { readFleetResponse } from "@/lib/fleet-ui";
 import {
   DriverListRecordSchema,
   DriverSalaryRequestSchema,
-  type DriverListRecord,
 } from "@/lib/validators/fleet-resources";
+import type { DriverListRecord } from "@/types/fleet";
 import type { FleetRecordsActions } from "./FleetRecordsList";
 
 export type DriverDialogProps = {
@@ -70,7 +70,7 @@ export function DriverSalaryDialog({ driver, branchId, actions }: DriverDialogPr
     event.preventDefault();
     const parsed = DriverSalaryRequestSchema.safeParse({ branchId, baseSalary: Number(value) });
     if (!parsed.success) {
-      setValidation("Ingresa un salario mayor que cero.");
+      setValidation("Ingresa un salario igual o mayor que cero.");
       return;
     }
     setValidation("");
@@ -131,7 +131,7 @@ export function DriverSalaryDialog({ driver, branchId, actions }: DriverDialogPr
             <Input
               id={`driver-salary-${driver.id}`}
               type="number"
-              min="0.01"
+              min="0"
               step="0.01"
               inputMode="decimal"
               value={value}

@@ -1,7 +1,7 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
 import { getTransportSession } from "./session";
-import type { TransportUser } from "@/lib/validators/auth";
+import type { TransportUser } from "@/types/auth";
 
 export async function requireTransportPageAccess(role?: TransportUser["role"]["name"]) {
   const user = await getTransportSession();

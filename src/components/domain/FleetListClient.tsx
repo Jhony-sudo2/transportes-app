@@ -13,9 +13,8 @@ import {
   BusListSchema,
   DriverListSchema,
   DriverOperationIdSchema,
-  type BusListRecord,
-  type DriverListRecord,
 } from "@/lib/validators/fleet-resources";
+import type { BusListRecord, DriverListRecord } from "@/types/fleet";
 const number = new Intl.NumberFormat("es-GT");
 const salary = new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" });
 const displayNumber = (value: number | null | undefined) =>
@@ -74,6 +73,21 @@ function StatusBadge({ status, labels }: { status: string; labels: Record<string
   );
 }
 const busColumns: Column<BusListRecord>[] = [
+  {
+    key: "busTypeId",
+    header: "Tipo",
+    render: (_value, bus) => (bus.busTypeId ? `Tipo #${bus.busTypeId}` : "Sin tipo confirmado"),
+  },
+  {
+    key: "rentalEnabled",
+    header: "Alquiler",
+    render: (_value, bus) =>
+      bus.rentalEnabled === undefined
+        ? "Sin confirmar"
+        : bus.rentalEnabled
+          ? "Habilitado"
+          : "No habilitado",
+  },
   {
     key: "photo",
     header: "Imagen",

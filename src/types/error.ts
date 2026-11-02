@@ -12,11 +12,16 @@ export type ErrorCode =
   | "idempotency.replay"
   | "system.internal_error";
 
+export interface UpstreamErrorContext {
+  code?: string;
+  correlationId?: string;
+}
 export class ApplicationError extends Error {
   constructor(
     public readonly code: ErrorCode,
     public readonly status: number,
     public readonly detail: string,
+    public readonly upstream?: UpstreamErrorContext,
   ) {
     super(detail);
     this.name = "ApplicationError";

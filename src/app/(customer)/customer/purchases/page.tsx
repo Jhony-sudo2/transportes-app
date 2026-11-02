@@ -1,4 +1,4 @@
-import { CustomerPurchases } from "@/components/domain/CustomerPurchases";
+import { CommercePurchases } from "@/components/domain/CommercePurchases";
 export default function CustomerPurchasesPage() {
   return (
     <section className="mx-auto max-w-6xl px-5 py-10 md:px-8 md:py-12">
@@ -9,7 +9,7 @@ export default function CustomerPurchasesPage() {
       <p className="mb-8 mt-3 text-sm leading-6 text-[var(--tg-muted)]">
         Abre una factura para consultar su detalle y los tickets asociados.
       </p>
-      <CustomerPurchases />
+      <CommercePurchases />
     </section>
   );
 }

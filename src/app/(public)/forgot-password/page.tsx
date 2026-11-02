@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/layout/AuthFrame";
-import { TransportForgotPasswordSchema, type TransportForgotPassword } from "@/lib/validators/auth";
+import { TransportForgotPasswordSchema } from "@/lib/validators/auth";
+import type { TransportForgotPassword } from "@/types/auth";
 export default function ForgotPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");

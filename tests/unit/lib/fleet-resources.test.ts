@@ -13,6 +13,9 @@ import {
 const mocks = vi.hoisted(() => ({ session: vi.fn(), get: vi.fn(), fetch: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ getTransportSession: mocks.session }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: mocks.get }) }));
+vi.mock("@/lib/api/bus-types", () => ({
+  getBusTypeForUnit: async (_token: string, id: number) => ({ id, capacity: 48 }),
+}));
 const user = {
   id: 3,
   role: { id: 3, name: "SUCURSAL_ADMIN" },
@@ -21,17 +24,22 @@ const user = {
   branchIds: [1, 2],
 };
 const busInput = {
+  stateId: 1,
+  busTypeId: 1,
+  rentalEnabled: false,
   branchId: 2,
   plateNumber: "C123ABC",
   brand: "Marca",
   color: "Azul",
-  model: 2025,
+  model: "2025",
   year_manufacture: 2024,
   seatRows: 12,
   seatColumns: 4,
   currentKm: 100,
 };
 const savedBus = {
+  busTypeId: 1,
+  rentalEnabled: false,
   id: 4,
   plateNumber: "C123ABC",
   brand: "Marca",
@@ -126,8 +134,8 @@ describe("Alta de buses y choferes por sucursal", () => {
     for (const changed of [
       { seatRows: 31 },
       { seatColumns: 7 },
-      { currentKm: 0 },
-      { model: 1979 },
+      { currentKm: -1 },
+      { model: "" },
       { seatRows: 1.5 },
     ])
       expect(CreateBusSchema.safeParse({ ...busInput, ...changed }).success).toBe(false);

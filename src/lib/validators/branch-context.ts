@@ -19,7 +19,6 @@ export const ManagedBranchContextSchema = z
 export const ManagedBranchSelectionResponseSchema = z.object({
   selectedBranchId: ManagedBranchIdSchema,
 });
-export type ManagedBranchContext = z.infer<typeof ManagedBranchContextSchema>;
 
 export function resolveManagedBranchId(branchIds: number[], stored?: string): number | null {
   const parsed = ManagedBranchIdSchema.safeParse(Number(stored));

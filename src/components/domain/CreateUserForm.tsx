@@ -13,10 +13,10 @@ import {
   AdminRoleListSchema,
   CreatedAdminUserSchema,
   ADMIN_ROLE_LABELS,
-  type CreateAdminUser,
-  type AdminRole,
-  type CreatedAdminUser,
 } from "@/lib/validators/admin-user";
+import type { CreateAdminUser, AdminRole, CreatedAdminUser } from "@/types/admin-user";
+import { useCustomerData } from "@/hooks/useCustomerData";
+import { BranchListSchema } from "@/lib/validators/branch";
 const fields: {
   name: FieldPath<CreateAdminUser>;
   label: string;
@@ -71,14 +71,19 @@ export function CreateUserForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedAdminUser | null>(null);
-  const { register, handleSubmit, getFieldState, formState, reset } = useForm<CreateAdminUser>({
-    resolver: zodResolver(CreateAdminUserSchema),
-    defaultValues: {
-      person: { name: "", lastName: "", dpi: "", nit: "", phone: "", adress: "" },
-      email: "",
-      ...(cashier ? { roleId: 5 } : {}),
-    },
-  });
+  const branches = useCustomerData("/api/admin/branches", BranchListSchema);
+  const { register, handleSubmit, getFieldState, formState, reset, watch, setValue } =
+    useForm<CreateAdminUser>({
+      resolver: zodResolver(CreateAdminUserSchema),
+      defaultValues: {
+        person: { name: "", lastName: "", dpi: "", nit: "", phone: "", adress: "" },
+        email: "",
+        branchIds: [],
+        ...(cashier ? { roleId: 5 } : {}),
+      },
+    });
+  const roleId = watch("roleId");
+  const branchIds = watch("branchIds") ?? [];
   const loadRoles = useCallback(async (signal?: AbortSignal) => {
     setLoadingRoles(true);
     setRolesError("");
@@ -110,7 +115,17 @@ export function CreateUserForm({
     return () => controller.abort();
   }, [loadRoles, cashier]);
   async function submit(data: CreateAdminUser) {
-    if (active.current || (cashier && (workspace.busy || uncertain))) return;
+    if (active.current || uncertain || workspace.busy) return;
+    if (
+      !cashier &&
+      [3, 5].includes(data.roleId) &&
+      (!data.branchIds.length || (data.roleId === 5 && data.branchIds.length !== 1))
+    ) {
+      setError(
+        "Asigna sucursales al administrador o selecciona una única sucursal para el cajero.",
+      );
+      return;
+    }
     active.current = true;
     if (cashier) workspace.setBusy(true);
     setBusy(true);
@@ -148,7 +163,7 @@ export function CreateUserForm({
       setCreated(record.data);
       reset();
     } catch (cause) {
-      if (cashier) setUncertain(ambiguous);
+      setUncertain(ambiguous);
       setError(
         (cause instanceof Error
           ? cause.message
@@ -221,7 +236,7 @@ export function CreateUserForm({
           }}
           noValidate
         >
-          <fieldset disabled={busy || (cashier && uncertain)} className="grid gap-5 sm:grid-cols-2">
+          <fieldset disabled={busy || uncertain} className="grid gap-5 sm:grid-cols-2">
             {fields.map((field) => {
               const issue = getFieldState(field.name, formState).error;
               const id = field.name.replace(".", "-");
@@ -263,7 +278,10 @@ export function CreateUserForm({
                   aria-invalid={!!formState.errors.roleId}
                   aria-describedby="role-help"
                   className="h-12 w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tg-green)] disabled:opacity-60"
-                  {...register("roleId", { valueAsNumber: true })}
+                  {...register("roleId", {
+                    valueAsNumber: true,
+                    onChange: () => setValue("branchIds", []),
+                  })}
                 >
                   <option value="">{loadingRoles ? "Cargando roles…" : "Selecciona un rol"}</option>
                   {roles.map((role) => (
@@ -283,6 +301,49 @@ export function CreateUserForm({
               </div>
             )}
           </fieldset>
+          {!cashier && [3, 5].includes(roleId) && (
+            <div className="mt-5 space-y-3">
+              <Label htmlFor="user-branches">
+                {roleId === 5 ? "Sucursal del cajero" : "Sucursales asignadas"}
+              </Label>
+              <select
+                id="user-branches"
+                multiple={roleId !== 5}
+                value={roleId === 5 ? String(branchIds[0] ?? "") : branchIds.map(String)}
+                disabled={busy || uncertain || branches.loading || !!branches.error}
+                className="min-h-12 w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-paper)] p-3 text-sm"
+                onChange={(event) =>
+                  setValue(
+                    "branchIds",
+                    Array.from(event.target.selectedOptions)
+                      .filter((option) => option.value)
+                      .map((option) => Number(option.value)),
+                    { shouldDirty: true },
+                  )
+                }
+              >
+                {roleId === 5 && <option value="">Selecciona una sucursal</option>}
+                {branches.data?.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+              {roleId !== 5 && (
+                <p className="text-xs text-[var(--tg-muted)]">
+                  Puedes seleccionar varias sucursales. Usa Ctrl o Cmd para añadir otras.
+                </p>
+              )}
+              {branches.error && (
+                <p role="alert">
+                  {branches.error}{" "}
+                  <button type="button" className="underline" onClick={branches.refresh}>
+                    Consultar sucursales
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
           {rolesError && (
             <div
               role="alert"
@@ -305,14 +366,17 @@ export function CreateUserForm({
               {error}
             </p>
           )}
+          {uncertain && (
+            <p className="mt-4 text-sm">
+              <Link href="/system-admin/users" className="underline">
+                Consulta el listado antes de enviar otra solicitud.
+              </Link>
+            </p>
+          )}
           <Button
             type="submit"
             disabled={
-              busy ||
-              loadingRoles ||
-              !!rolesError ||
-              !roles.length ||
-              (cashier && (uncertain || workspace.busy))
+              busy || loadingRoles || !!rolesError || !roles.length || uncertain || workspace.busy
             }
             className="mt-7 w-full sm:w-auto"
           >
@@ -338,7 +402,7 @@ export function CreateUserForm({
             ? "El cajero quedará vinculado únicamente a " +
               cashierBranch.name +
               ". Recibirá el enlace para establecer su contraseña por correo."
-            : "Al crear un administrador de sucursal, puedes asignarle sus sucursales desde el listado de usuarios."}
+            : "Asigna las sucursales al registrar administradores y cajeros. Las cuentas de cliente se crean desde el registro público; los choferes se registran con su licencia desde flota."}
         </p>
       </aside>
     </div>

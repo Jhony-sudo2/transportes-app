@@ -140,3 +140,11 @@ replay_pid*
 *.jks
 *.keystore
 # <<< TRANSPORTES: fin reglas locales <<<
+/.next-identity-check/
+/.next-identity-check.tsconfig.json
+/.next-administration-check/
+/.next-administration-check.tsconfig.json
+/.next-journey-check/
+/.next-journey-check.tsconfig.json
+/.next-completion-check/
+/.next-completion-check.tsconfig.json

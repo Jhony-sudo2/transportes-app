@@ -1,12 +1,14 @@
 "use client";
-import { House, Wallet, ReceiptText, Undo2 } from "lucide-react";
+import { House, Wallet, ReceiptText, Undo2, Search } from "lucide-react";
 import { ManagementNavigation } from "./ManagementNavigation";
 import { useBranchWorkspace } from "./BranchWorkspaceProvider";
 const items = [
   { label: "Inicio", icon: House, href: "/" },
+  { label: "Buscar viajes", icon: Search, href: "/trips" },
   { label: "Mi billetera", icon: Wallet, href: "/customer/wallet" },
   { label: "Mis compras", icon: ReceiptText, href: "/customer/purchases" },
   { label: "Devoluciones", icon: Undo2, href: "/customer/refunds" },
+  { label: "Mis alquileres", icon: ReceiptText, href: "/customer/rentals" },
 ];
 export function CustomerNavigation({ name }: { name: string }) {
   const { busy } = useBranchWorkspace();

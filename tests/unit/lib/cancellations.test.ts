@@ -180,9 +180,9 @@ describe("Cancelación propia de tickets", () => {
       expect(mocks.fetch).toHaveBeenCalledTimes(3);
     },
   );
-  it("habilita la ruta del BFF sin caché en middleware", () => {
+  it("retira el contrato de cancelación de factura anterior sin permitir escrituras", () => {
     const response = middleware(request());
-    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.status).toBe(410);
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });

@@ -7,6 +7,7 @@ import { AdminNavigation } from "./AdminNavigation";
 import { BranchAdminNavigation } from "./BranchAdminNavigation";
 import { CustomerNavigation } from "./CustomerNavigation";
 import { CashierNavigation } from "./CashierNavigation";
+import { DriverNavigation } from "./DriverNavigation";
 export async function NavBar(): Promise<React.ReactElement> {
   let user = null;
   try {
@@ -22,6 +23,8 @@ export async function NavBar(): Promise<React.ReactElement> {
     return <CustomerNavigation name={user.name + " " + user.lastName} />;
   if (user?.role.name === "CAJERO" && !user.resetPassword)
     return <CashierNavigation name={user.name + " " + user.lastName} />;
+  if (user?.role.name === "DRIVER" && !user.resetPassword)
+    return <DriverNavigation name={user.name + " " + user.lastName} />;
   if (user && !user.resetPassword) {
     const roleLabels = {
       ADMIN: "Administrador",
@@ -52,6 +55,7 @@ export async function NavBar(): Promise<React.ReactElement> {
           </span>
         </Link>
         <nav aria-label="Navegación principal">
+          <Link href="/trips">Buscar viajes</Link>
           <Link href="/login">Ingresar</Link>
           <Link href="/register" className="tg-nav-register">
             Crear cuenta <ArrowUpRight size={16} aria-hidden="true" />

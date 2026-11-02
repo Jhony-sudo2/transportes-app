@@ -25,9 +25,43 @@ const user = {
   twoFactorEnabled: false,
   branchIds: [1, 2],
 };
+const busTypes = [
+  {
+    id: 1,
+    name: "Grande",
+    capacity: 48,
+    description: "",
+    fuelEstimatePerKm: 2,
+    depreciationPerKm: 0.2,
+    suggestedDriverSalaryPerTrip: 100,
+    active: true,
+  },
+  {
+    id: 2,
+    name: "Ejecutivo",
+    capacity: 40,
+    description: "",
+    fuelEstimatePerKm: 2,
+    depreciationPerKm: 0.2,
+    suggestedDriverSalaryPerTrip: 100,
+    active: true,
+  },
+  {
+    id: 3,
+    name: "Pequeño",
+    capacity: 24,
+    description: "",
+    fuelEstimatePerKm: 2,
+    depreciationPerKm: 0.2,
+    suggestedDriverSalaryPerTrip: 100,
+    active: true,
+  },
+];
 const buses = [
   {
     id: 4,
+    busTypeId: 1,
+    rentalEnabled: false,
     plateNumber: "C123ABC",
     brand: "Marca",
     model: "2025",
@@ -41,6 +75,8 @@ const buses = [
   },
   {
     id: 5,
+    busTypeId: 3,
+    rentalEnabled: false,
     plateNumber: "C999BBB",
     brand: "Anterior",
     model: "2020",
@@ -74,6 +110,12 @@ const api = http.createServer(async (request, response) => {
   if (request.url === "/api/v1/users/profile")
     return send(token === "bus-admin" ? user : { ...user, role: { id: 2, name: "CUSTOMER" } });
   if (token !== "bus-admin") return send({}, 403);
+  if (request.url === "/api/v1/bus-types") return send(busTypes);
+  if (request.url === "/api/v1/buses/states")
+    return send([
+      { id: 1, name: "AVAILABLE" },
+      { id: 2, name: "OUT_OF_SERVICE" },
+    ]);
   if (request.url === "/api/v1/branches/1") return send({ id: 1, name: "Norte" });
   if (request.url === "/api/v1/branches/2") return send({ id: 2, name: "Central" });
   if (request.url === "/api/v1/branches/2/buses") return send(buses);
@@ -97,7 +139,8 @@ const api = http.createServer(async (request, response) => {
     if (create) {
       createAttempts++;
       assert.equal(data.branchId, 2);
-      assert.equal(data.capacity, data.seatRows * data.seatColumns);
+      assert.equal(data.capacity, busTypes.find((type) => type.id === data.busTypeId).capacity);
+      assert.equal(data.stateId, 1);
       assert.ok(form.get("photo").size > 0);
     } else updateAttempts++;
     if (!create && rejectUpdate) return send({ detail: "El bus tiene viajes pendientes" }, 409);
@@ -105,6 +148,8 @@ const api = http.createServer(async (request, response) => {
     if (create) {
       const created = {
         id: 6,
+        busTypeId: data.busTypeId,
+        rentalEnabled: data.rentalEnabled,
         plateNumber: data.plateNumber,
         brand: data.brand,
         model: String(data.model),
@@ -123,7 +168,15 @@ const api = http.createServer(async (request, response) => {
     const bus = buses.find((bus) => bus.id === Number(request.url.split("/").at(-1)));
     if (!bus) return send({}, 404);
     // BusResponse todavía no expone color; la edición debe pedirlo de nuevo.
-    for (const field of ["brand", "yearManufacture", "capacity", "seatRows", "seatColumns"])
+    for (const field of [
+      "brand",
+      "yearManufacture",
+      "capacity",
+      "seatRows",
+      "seatColumns",
+      "busTypeId",
+      "rentalEnabled",
+    ])
       bus[field] = data[field];
     bus.plateNumber = data.plateNumber.toUpperCase();
     bus.model = String(data.model);
@@ -213,6 +266,8 @@ try {
   await expect(dialog.getByLabel("Kilometraje inicial", { exact: true })).toHaveCount(0);
   await dialog.getByLabel("Color", { exact: true }).fill("Azul");
   await dialog.getByLabel("Marca", { exact: true }).fill("Actualizada");
+  await expect(dialog.getByLabel("Tipo de bus", { exact: true })).toHaveValue("1");
+  await expect(dialog.getByRole("button", { name: "Guardar cambios", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "Guardar cambios", exact: true }).evaluate((button) => {
     button.click();
     button.click();
@@ -271,13 +326,19 @@ try {
     ["Número de placa", "C456DEF"],
     ["Marca", "Nueva"],
     ["Color", "Blanco"],
-    ["Modelo (año)", "2025"],
+    ["Modelo", "2025"],
     ["Año de fabricación", "2024"],
     ["Kilometraje inicial", "20"],
-    ["Filas de asientos", "10"],
+    ["Filas de asientos", "12"],
     ["Columnas de asientos", "4"],
   ])
     await page.getByLabel(label, { exact: true }).fill(value);
+  await page.getByLabel("Tipo de bus", { exact: true }).selectOption("2");
+  await page.getByLabel("Estado inicial", { exact: true }).selectOption("1");
+  await page
+    .getByRole("checkbox", { name: "Habilitado para alquiler privado", exact: true })
+    .check();
+  await expect(page.getByLabel("Capacidad de pasajeros", { exact: true })).toHaveValue("40");
   await page.getByRole("button", { name: "Crear bus", exact: true }).click();
   await expect(
     page.getByRole("alert").filter({ hasText: "Selecciona una fotografía" }),
@@ -305,6 +366,8 @@ try {
   await expect(page.getByRole("img", { name: "Bus con placa C456DEF", exact: true })).toBeVisible();
   assert.equal(createAttempts, 1);
   assert.equal(createWrites, 1);
+  assert.equal(buses.find((bus) => bus.id === 6).busTypeId, 2);
+  assert.equal(buses.find((bus) => bus.id === 6).rentalEnabled, true);
   await page.getByRole("link", { name: "Ver buses", exact: true }).click();
   await expect(page.getByRole("img", { name: "Bus con placa C456DEF", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Editar bus C456DEF", exact: true }).click();

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FleetField } from "./FleetField";
 import { DriverProfilePhoto } from "./DriverProfilePhoto";
 import { AccountTwoFactorControl } from "./AccountTwoFactorControl";
+import { AccountEmailChange } from "./AccountEmailChange";
 import { useBranchWorkspace } from "@/components/layout/BranchWorkspaceProvider";
 import { readFleetResponse } from "@/lib/fleet-ui";
 import { DriverOperationIdSchema, driverPhotoError } from "@/lib/validators/fleet-resources";
@@ -15,10 +16,12 @@ import {
   AccountProfileRequestSchema,
   DriverProfileRequestSchema,
   AccountProfileOperationSchema,
-  type AccountProfile,
-  type AccountProfileRequest,
 } from "@/lib/validators/account";
-import type { z } from "zod";
+import type {
+  AccountProfile,
+  AccountProfileRequest,
+  AccountProfileOperation,
+} from "@/types/account";
 
 function values(profile: AccountProfile): AccountProfileRequest {
   return {
@@ -48,7 +51,7 @@ function operationUrl(id: string) {
   url.searchParams.set("operationId", id);
   window.history.replaceState(null, "", url.pathname + url.search);
 }
-type Operation = z.infer<typeof AccountProfileOperationSchema>;
+type Operation = AccountProfileOperation;
 export function AccountProfileForm({
   initialProfile,
   initialOperationId,
@@ -293,6 +296,7 @@ export function AccountProfileForm({
             maxLength={255}
             disabled={disabled}
             error={errors.email}
+            readOnly
             {...register("email")}
           />
           <FleetField
@@ -311,6 +315,7 @@ export function AccountProfileForm({
             maxLength={50}
             disabled={disabled}
             error={errors.nit}
+            readOnly
             {...register("nit")}
           />
           <FleetField
@@ -334,6 +339,10 @@ export function AccountProfileForm({
             />
           </div>
         </div>
+        <p className="text-sm text-[var(--tg-muted)]">
+          El NIT es permanente. Para cambiar tu correo utiliza la solicitud de verificación al final
+          de esta página.
+        </p>
         <section
           aria-label="Autenticación de dos factores"
           className="space-y-3 rounded-2xl border border-[var(--tg-line)] bg-[var(--color-surface)] p-5"
@@ -398,6 +407,7 @@ export function AccountProfileForm({
           </Button>
         </div>
       </form>
+      <AccountEmailChange currentEmail={profile.user.email} />
     </section>
   );
 }

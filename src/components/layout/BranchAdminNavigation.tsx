@@ -1,21 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, BusFront, UserRoundPlus, Route, ContactRound } from "lucide-react";
+import { Building2, BusFront, UserRoundPlus, Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ManagementNavigation } from "./ManagementNavigation";
 import { useBranchWorkspace } from "./BranchWorkspaceProvider";
 import {
   ManagedBranchContextSchema,
   ManagedBranchSelectionResponseSchema,
-  type ManagedBranchContext,
 } from "@/lib/validators/branch-context";
+import type { ManagedBranchContext } from "@/types/branch";
 
 const items = [
   { label: "Buses", icon: BusFront, href: "/branch-admin/buses" },
   { label: "Choferes", icon: UserRoundPlus, href: "/branch-admin/drivers" },
-  { label: "Crear cajero", icon: ContactRound, href: "/branch-admin/cashiers/new" },
-  { label: "Viajes", icon: Route, href: null },
+  { label: "Rutas", icon: Route, href: "/branch-admin/routes" },
+  { label: "Viajes", icon: Route, href: "/branch-admin/trips" },
+  { label: "Venta presencial", icon: BusFront, href: "/branch-admin/pos" },
+  { label: "Alquileres", icon: BusFront, href: "/branch-admin/rentals" },
+  { label: "Caja", icon: Building2, href: "/branch-admin/cash" },
+  { label: "Bloqueos de asientos", icon: BusFront, href: "/branch-admin/seat-restrictions" },
+  { label: "Taller", icon: BusFront, href: "/branch-admin/maintenance" },
+  { label: "Informes", icon: Route, href: "/branch-admin/reports" },
 ];
 async function responseData(response: Response): Promise<unknown> {
   const body: unknown = await response.json();
@@ -96,13 +102,11 @@ export function BranchAdminNavigation({ name }: { name: string }) {
       items={items.map((item) => ({
         ...item,
         href: !busy && !loading && !saving && activeBranch ? item.href : null,
-        disabledReason: item.href
-          ? busy
-            ? "Espera a que termine la operación."
-            : "Selecciona una sucursal para continuar."
-          : "Viajes: próximamente",
+        disabledReason: busy
+          ? "Espera a que termine la operación."
+          : "Selecciona una sucursal para continuar.",
       }))}
-      note="Gestiona buses, choferes y cajeros de la sucursal seleccionada. Viajes próximamente."
+      note="Gestiona rutas, viajes, buses y choferes de la sucursal seleccionada."
     >
       <div className="mb-4 rounded-xl border border-[var(--tg-line)] bg-[var(--color-surface)] p-4">
         <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">

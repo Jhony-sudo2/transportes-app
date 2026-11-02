@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess, adminRequest, adminErrorResponse } from "@/lib/api/admin";
-import { AdminUserSchema, AdminUserAvailabilitySchema } from "@/lib/validators/admin-user";
+import { StaffUserResultSchema, AdminUserAvailabilitySchema } from "@/lib/validators/admin-user";
 import { ManagedBranchIdSchema } from "@/lib/validators/branch-context";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 import { ApplicationError } from "@/types/error";
@@ -25,12 +25,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         400,
         "Indica un estado activo válido para la cuenta.",
       );
-    const user = AdminUserSchema.safeParse(
+    const user = StaffUserResultSchema.safeParse(
       await adminRequest(
-        `users/${id.data}/${parsed.data.isActive ? "activate" : "deactivate"}`,
+        `users/staff/${id.data}`,
         access.token,
-        undefined,
-        "PUT",
+        { active: parsed.data.isActive },
+        "PATCH",
       ),
     );
     if (!user.success || user.data.id !== id.data || user.data.isActive !== parsed.data.isActive)

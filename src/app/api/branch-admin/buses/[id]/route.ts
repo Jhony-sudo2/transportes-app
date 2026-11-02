@@ -14,6 +14,7 @@ import {
   UpdateBusSchema,
 } from "@/lib/validators/fleet-resources";
 import { ApplicationError } from "@/types/error";
+import { getBusTypeForUnit } from "@/lib/api/bus-types";
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -35,13 +36,27 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       BusListSchema,
       await fleetRequest(`branches/${branchId}/buses`, token),
     );
-    if (!buses.some((bus) => bus.id === id.data))
+    const current = buses.find((bus) => bus.id === id.data);
+    if (!current)
       throw new ApplicationError(
         "auth.forbidden",
         403,
         "El bus no pertenece a la sucursal seleccionada.",
       );
     const { branchId: _branchId, ...data } = parsed.data;
+    const type = await getBusTypeForUnit(
+      token,
+      data.busTypeId,
+      data.seatRows,
+      data.seatColumns,
+      current.busTypeId,
+    );
+    if (data.capacity !== type.capacity)
+      throw new ApplicationError(
+        "validation.failed",
+        400,
+        "La capacidad debe coincidir con el tipo de bus.",
+      );
     const unconfirmed =
       "No se pudo confirmar la actualización. Consulta el listado antes de volver a guardar.";
     const item = validatedFleetResult(
@@ -58,6 +73,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       item.capacity !== data.capacity ||
       item.seatRows !== data.seatRows ||
       item.seatColumns !== data.seatColumns ||
+      item.busTypeId !== data.busTypeId ||
+      item.rentalEnabled !== data.rentalEnabled ||
       (photo && !item.photo)
     )
       throw new ApplicationError("system.internal_error", 502, unconfirmed);

@@ -29,6 +29,7 @@ const input = {
   },
   email: "juan@example.com",
   roleId: 5,
+  branchIds: [2],
 };
 const roles = [
   { id: 1, name: "ADMIN" },
@@ -74,22 +75,26 @@ describe("Creacion administrativa de usuarios", () => {
     mocks.fetch.mockResolvedValueOnce(Response.json(roles));
     const response = await getRoles();
     expect(response.status).toBe(200);
-    expect((await response.json()).map((role: { id: number }) => role.id)).toEqual([1, 2, 3, 5]);
+    expect((await response.json()).map((role: { id: number }) => role.id)).toEqual([1, 3, 5]);
   });
   it("crea un cajero sin contrasena y envia el token solo en el encabezado", async () => {
     mocks.fetch
       .mockResolvedValueOnce(Response.json(roles))
       .mockResolvedValueOnce(
-        Response.json(
-          { ...admin, id: 8, name: "Juan", email: input.email, role: { id: 5, name: "CAJERO" } },
-          { status: 201 },
-        ),
+        Response.json({ userId: 8, role: "CASHIER", branchIds: [2] }, { status: 201 }),
       );
-    const response = await POST(request({ ...input, password: "no enviar" }));
+    const response = await POST(request(input));
     expect(response.status).toBe(201);
     expect((await response.json()).user.role.name).toBe("CAJERO");
     expect(mocks.fetch.mock.calls[1]?.[1].headers.Authorization).toBe("Bearer private-token");
-    expect(JSON.parse(mocks.fetch.mock.calls[1]?.[1].body)).toEqual(input);
+    expect(mocks.fetch.mock.calls[1]?.[0]).toMatch(/users\/staff$/);
+    const { adress, ...person } = input.person;
+    expect(JSON.parse(mocks.fetch.mock.calls[1]?.[1].body)).toEqual({
+      person: { ...person, address: adress },
+      email: input.email,
+      role: "CASHIER",
+      branchIds: [2],
+    });
   });
   it("rechaza un rol ausente del catalogo", async () => {
     mocks.fetch.mockResolvedValueOnce(Response.json(roles.filter((role) => role.id !== 5)));

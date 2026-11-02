@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
-import { SystemAdminReportsClient } from "@/components/domain/SystemAdminReportsClient";
+import { OperationsPage } from "@/components/domain/OperationsPage";
+import { AnalyticsWorkspace } from "@/components/domain/AnalyticsWorkspace";
 
-export default async function SystemAdminReportsPage(): Promise<React.ReactElement> {
-  const session = await getSession();
-  if (session === null) redirect("/login");
-
-  return <SystemAdminReportsClient />;
+export default function SystemAdminReportsPage() {
+  return (
+    <OperationsPage title="Informes globales" roles={["ADMIN"]}>
+      {() => <AnalyticsWorkspace />}
+    </OperationsPage>
+  );
 }

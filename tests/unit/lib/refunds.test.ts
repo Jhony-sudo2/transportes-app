@@ -270,9 +270,10 @@ describe("Devoluciones: acceso, sucursal y confirmación", () => {
     "/api/customer/refunds/10",
     "/api/cashier/context",
     "/api/cashier/refunds/10",
-  ])("habilita la ruta %s con no-store", (route) => {
+  ])("conserva vistas y retira contratos antiguos de devolución: %s", (route) => {
     const response = middleware(new NextRequest("http://localhost:3000" + route));
-    expect(response.headers.get("x-middleware-next")).toBe("1");
+    if (/^\/api\/(customer|cashier)\/refunds/.test(route)) expect(response.status).toBe(410);
+    else expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 });

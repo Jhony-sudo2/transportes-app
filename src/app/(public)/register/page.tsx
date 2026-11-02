@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/layout/AuthFrame";
 import {
   TransportRegisterRequestSchema,
-  type TransportRegisterRequest,
+  TransportRegisterUiResponseSchema,
 } from "@/lib/validators/auth";
+import type { TransportRegisterRequest } from "@/types/auth";
+import { identityPost } from "@/lib/identity-ui";
 const fields: {
   name: FieldPath<TransportRegisterRequest>;
   label: string;
@@ -65,36 +67,29 @@ const fields: {
   },
 ];
 export default function RegisterPage(): React.ReactElement {
+  const sending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
   const { register, handleSubmit, getFieldState, formState, reset } =
     useForm<TransportRegisterRequest>({ resolver: zodResolver(TransportRegisterRequestSchema) });
   async function onSubmit(data: TransportRegisterRequest): Promise<void> {
+    if (sending.current) return;
+    sending.current = true;
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/users/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const result = (await response.json()) as { status?: string; detail?: string };
-      if (!response.ok) {
-        setMessage(result.detail ?? "No se pudo crear la cuenta.");
-        return;
-      }
-      if (result.status !== "registered") {
-        setMessage("El servidor no confirmó el registro.");
-        return;
-      }
+      await identityPost("/api/users/register", data, TransportRegisterUiResponseSchema);
       reset();
       setSuccess(true);
-    } catch {
+    } catch (error) {
       setMessage(
-        "No se pudo confirmar el registro. Comprueba tu conexión e intenta iniciar sesión antes de repetirlo.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo confirmar el registro. Revisa tu correo antes de repetirlo.",
       );
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
@@ -105,22 +100,26 @@ export default function RegisterPage(): React.ReactElement {
       description="Crea tu cuenta y conecta con Transportes Guatemala."
     >
       <div data-testid="register-page">
-        <h2 className="tg-card-title">
-          {success ? "Ya eres parte del camino." : "Crea tu cuenta"}
-        </h2>
+        <h2 className="tg-card-title">{success ? "Confirma tu correo." : "Crea tu cuenta"}</h2>
         {success ? (
           <div className="space-y-5">
             <p role="status">
-              Tu registro se completó correctamente. Inicia sesión con tu correo y contraseña.
+              Tu cuenta fue creada. Abre el enlace de verificación que recibirás por correo para
+              completar el registro. Tus compras con el mismo NIT se vinculan a tu identidad
+              comercial; las compras CF se conservan por separado.
             </p>
             <Button asChild className="w-full">
               <Link href="/login">Iniciar sesión</Link>
             </Button>
+            <Link href="/auth/resend-verification" className="block text-center underline">
+              Solicitar otro enlace de verificación
+            </Link>
           </div>
         ) : (
           <>
             <p className="tg-card-description">
-              Tus datos personales y de acceso, en un solo lugar.
+              Usa tu NIT personal para recuperar las compras realizadas con él. El NIT será
+              permanente; deberás verificar tu correo.
             </p>{" "}
             <form
               onSubmit={(e) => {
