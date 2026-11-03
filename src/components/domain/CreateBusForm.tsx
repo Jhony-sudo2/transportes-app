@@ -100,8 +100,8 @@ export function CreateBusForm({
       setError("Selecciona un tipo de bus activo del catálogo.");
       return;
     }
-    if (!validSeats || capacity > rows * columns) {
-      setError("La distribución debe tener espacio para la capacidad del tipo de bus.");
+    if (!validSeats || rows * columns > capacity) {
+      setError("La distribución no puede superar la capacidad del tipo de bus.");
       return;
     }
     const validation = !bus || photo ? fleetPhotoError(photo) : null;
@@ -321,7 +321,8 @@ export function CreateBusForm({
                 value={capacity || ""}
               />
               <p className="text-xs text-[var(--tg-muted)]">
-                La capacidad corresponde al tipo seleccionado y debe caber en la distribución.
+                Los asientos de la distribución no pueden superar la capacidad del tipo
+                seleccionado.
               </p>
             </div>
           </fieldset>
@@ -379,7 +380,7 @@ export function CreateBusForm({
         <h2 className="text-lg font-semibold">Distribución de asientos</h2>
         <p className="mt-3 text-sm leading-6 text-[#b9d2bc]">
           {validSeats
-            ? `${rows} filas × ${columns} columnas: ${capacity} asientos.`
+            ? `${rows} filas × ${columns} columnas: ${rows * columns} asientos; capacidad del tipo: ${capacity}.`
             : "Ingresa las filas y columnas para ver la capacidad del bus."}
         </p>
         {validSeats && (

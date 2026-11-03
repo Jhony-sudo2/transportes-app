@@ -1,9 +1,18 @@
-import type { TripRecord } from "./journey";
+import type { TripRecord, TripDeparture, TripArrival } from "./journey";
 import type { CancellationPreview } from "./commerce";
 import type { Branch } from "./branch";
-import type { BusType, BusListRecord, DriverListRecord } from "./fleet";
+import type { BusListRecord, DriverListRecord } from "./fleet";
+export interface RentalBusType {
+  id: number;
+  name: string;
+  capacity: number;
+  description?: string | null | undefined;
+  active?: boolean | undefined;
+  suggestedDriverSalaryPerTrip?: number | undefined;
+  availabilityHint?: "POSSIBLE" | "NONE" | "UNKNOWN" | undefined;
+}
 export interface RentalContext {
-  busTypes: BusType[];
+  busTypes: RentalBusType[];
   branches: Branch[];
   branchId: number | null;
 }
@@ -32,19 +41,33 @@ export interface QuotePriceComponent {
 }
 export interface RentalQuote extends RentalQuoteInput {
   quoteId: number;
-  customerId: number;
+  quoteReference?: string | undefined;
+  customerId?: number | undefined;
   status: "PENDING_APPROVAL" | "APPROVED" | "PAID";
   expiresAt: string;
   finalPrice: number | null;
-  managingBranchId: number | null;
+  managingBranchId?: number | null | undefined;
   rentalId: number | null;
-  invoiceId: number | null;
+  invoiceId?: number | null | undefined;
   estimatedCost?: number | null | undefined;
   priceComponents?: QuotePriceComponent[] | undefined;
   customerNit?: string | undefined;
 }
-export interface RentalLeg extends TripRecord {
+export interface RentalLeg
+  extends Pick<
+    TripRecord,
+    | "tripId"
+    | "status"
+    | "operatingBranchId"
+    | "busId"
+    | "driverId"
+    | "scheduledDepartureAt"
+    | "scheduledArrivalAt"
+  > {
   legType: "OUTBOUND" | "RETURN";
+  departure?: TripDeparture | null | undefined;
+  arrival?: TripArrival | null | undefined;
+  driverBaseSalarySnapshot?: number | null | undefined;
 }
 export interface RentalContract {
   cancellationPreview?:
@@ -70,4 +93,10 @@ export interface RentalPayment {
   sourceBranchId?: number | undefined;
   revenueBranchId?: number | undefined;
   rentalId?: number | null | undefined;
+}
+export interface PayableQuote {
+  quoteId: number;
+  customerNit: string;
+  finalPrice: number;
+  expiresAt: string;
 }

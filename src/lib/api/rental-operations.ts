@@ -4,8 +4,8 @@ import { z } from "zod";
 import * as V from "@/lib/validators/rentals";
 import { OperationKeySchema } from "@/lib/validators/commerce";
 import { ManagedBranchIdSchema as id } from "@/lib/validators/branch-context";
-import { BranchListSchema } from "@/lib/validators/branch";
-import { BusTypeListSchema } from "@/lib/validators/bus-type";
+import { BranchListSchema, BranchSchema } from "@/lib/validators/branch";
+import { BusTypeListResponseSchema } from "@/lib/validators/bus-type";
 import { BusListSchema, DriverListSchema } from "@/lib/validators/fleet-resources";
 import { busAvailability, driverAvailability } from "@/lib/fleet-availability";
 import { operationsAccess } from "./operations-access";
@@ -17,12 +17,7 @@ import {
 } from "./transport-service";
 import { adminErrorResponse } from "./admin";
 import { ApplicationError } from "@/types/error";
-import {
-  TripRecordSchema,
-  TripDepartureSchema,
-  TripArrivalSchema,
-  TripListSchema,
-} from "@/lib/validators/journey";
+import { TripRecordSchema, TripDepartureSchema, TripArrivalSchema } from "@/lib/validators/journey";
 import { confirmedTrip } from "./journey";
 import type { RentalQuote } from "@/types/rentals";
 type Access = Awaited<ReturnType<typeof operationsAccess>>;
@@ -31,6 +26,35 @@ function fail(detail: string, status = 403): never {
   throw new ApplicationError("auth.forbidden", status, detail);
 }
 const parseId = (value: string | undefined) => checkedBody(id, Number(value));
+async function allPages<T>(
+  path: string,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  access: Access,
+) {
+  const pageSchema = z.object({
+    content: z.array(schema),
+    page: z.number().int().nonnegative(),
+    size: z.number().int().positive(),
+    totalElements: z.number().int().nonnegative().safe(),
+  });
+  const result: T[] = [];
+  let total: number | undefined;
+  for (let page = 0; page < 50; page++) {
+    const separator = path.includes("?") ? "&" : "?";
+    const current = serviceResult(
+      pageSchema,
+      await transportService(`${path}${separator}page=${page}&size=100`, access),
+    );
+    if (current.page !== page || (total !== undefined && current.totalElements !== total))
+      fail("El listado cambió durante la consulta. Actualiza la información.", 502);
+    total = current.totalElements;
+    result.push(...current.content);
+    if (result.length >= total) return result;
+    if (current.content.length === 0)
+      fail("El listado está incompleto. Actualiza la información.", 502);
+  }
+  return fail("El listado es demasiado extenso para mostrarlo completo.", 502);
+}
 async function body<T>(r: NextRequest, s: z.ZodType<T, z.ZodTypeDef, unknown>) {
   return checkedBody(s, await r.json().catch(() => null));
 }
@@ -56,37 +80,29 @@ function projection(q: RentalQuote, a: Access) {
   return q;
 }
 async function quote(qid: number, a: Access) {
-  if (a.user.role.name === "CUSTOMER") {
-    const mine = serviceResult(
-      V.RentalQuoteSchema.array(),
-      await transportService("rental-quotes/me", a),
-    );
-    if (!mine.some((q) => q.quoteId === qid)) fail("La cotización no pertenece a tu cuenta.");
-  }
-  const q = serviceResult(V.RentalQuoteSchema, await transportService(`rental-quotes/${qid}`, a));
+  const branchQuery =
+    a.user.role.name === "SUCURSAL_ADMIN" && a.branchId ? `?branchId=${a.branchId}` : "";
+  const q = serviceResult(
+    V.RentalQuoteResponseSchema,
+    await transportService(`rental-quotes/${qid}${branchQuery}`, a),
+  );
   if (q.quoteId !== qid) fail("No se pudo verificar la cotización.", 502);
   if (
     a.user.role.name === "SUCURSAL_ADMIN" &&
-    q.managingBranchId !== null &&
+    q.managingBranchId != null &&
     q.managingBranchId !== a.branchId
   )
     fail("La cotización pertenece a otra sucursal.");
   if (
     a.user.role.name === "CUSTOMER" &&
     a.user.customerId != null &&
+    q.customerId != null &&
     q.customerId !== a.user.customerId
   )
     fail("La cotización no corresponde a tu Customer.");
   return q;
 }
 async function contract(rid: number, a: Access) {
-  if (a.user.role.name === "CUSTOMER") {
-    const mine = serviceResult(
-      V.RentalContractSchema.array(),
-      await transportService("rentals/me", a),
-    );
-    if (!mine.some((r) => r.rentalId === rid)) fail("El alquiler no pertenece a tu cuenta.");
-  }
   const r = serviceResult(V.RentalContractSchema, await transportService(`rentals/${rid}`, a));
   if (r.rentalId !== rid) fail("No se pudo verificar el alquiler.", 502);
   if (a.user.role.name === "SUCURSAL_ADMIN" && r.managingBranchId !== a.branchId)
@@ -106,9 +122,10 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
     if (method !== "GET") requireSameOrigin(request);
     if (path === "operating-trips" && method === "GET") {
       const a = await operationsAccess(request, ["SUCURSAL_ADMIN"], true),
-        trips = serviceResult(
-          TripListSchema,
-          await transportService(`trips?operatingBranchId=${a.branchId}&tripType=PRIVATE`, a),
+        trips = await allPages(
+          `trips/operations?branchId=${a.branchId}&tripType=PRIVATE`,
+          TripRecordSchema,
+          a,
         );
       if (trips.some((t) => t.tripType !== "PRIVATE" || t.operatingBranchId !== a.branchId))
         fail("El listado contiene viajes privados de otra sucursal.");
@@ -185,11 +202,21 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
         ["ADMIN", "SUCURSAL_ADMIN", "CUSTOMER", "CAJERO"],
         true,
       );
-      const types = serviceResult(BusTypeListSchema, await transportService("bus-types", a));
+      const types =
+        a.user.role.name === "CUSTOMER"
+          ? serviceResult(
+              V.RentalCatalogResponseSchema,
+              await transportService("bus-types/rental-catalog"),
+            )
+          : a.user.role.name === "CAJERO"
+            ? []
+            : serviceResult(BusTypeListResponseSchema, await transportService("bus-types", a));
       const branches =
         a.user.role.name === "CUSTOMER" || a.user.role.name === "CAJERO"
           ? []
-          : serviceResult(BranchListSchema, await transportService("branches", a));
+          : a.user.role.name === "SUCURSAL_ADMIN" && a.branchId
+            ? [serviceResult(BranchSchema, await transportService(`branches/${a.branchId}`, a))]
+            : serviceResult(BranchListSchema, await transportService("branches", a));
       return NextResponse.json({ busTypes: types, branches, branchId: a.branchId ?? null });
     }
     if (path === "resources" && method === "GET") {
@@ -210,10 +237,10 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
       });
     }
     if (path === "policy" && ["GET", "PUT"].includes(method)) {
-      const a = await operationsAccess(request, method === "PUT" ? ["ADMIN"] : [...ADMINS]);
+      const a = await operationsAccess(request, ["ADMIN"]);
       return NextResponse.json(
         serviceResult(
-          V.RentalPolicySchema,
+          V.RentalPolicyResponseSchema,
           method === "GET"
             ? await transportService("rental-quote-policy", a)
             : await command(
@@ -231,12 +258,16 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
       let upstream = "rental-quotes/me";
       if (a.user.role.name === "CAJERO") {
         const ref = request.nextUrl.searchParams.get("reference");
+        if (!ref?.trim()) return NextResponse.json([]);
         const q = new URLSearchParams();
-        if (ref) q.set("reference", checkedBody(z.string().trim().min(1).max(128), ref));
+        q.set("reference", checkedBody(z.string().trim().min(1).max(32), ref));
         upstream = `rental-quotes/payable?${q}`;
+        return NextResponse.json(
+          serviceResult(V.PayableQuoteSchema.array(), await transportService(upstream, a)),
+        );
       } else if (a.user.role.name !== "CUSTOMER") {
         const params = new URLSearchParams();
-        if (a.branchId) params.set("managingBranchId", String(a.branchId));
+        if (a.branchId) params.set("branchId", String(a.branchId));
         const status = request.nextUrl.searchParams.get("status");
         if (status)
           params.set(
@@ -245,24 +276,16 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
           );
         upstream = `rental-quotes/admin?${params}`;
       }
-      const quotes = serviceResult(
-        V.RentalQuoteSchema.array(),
-        await transportService(upstream, a),
-      );
+      const quotes = await allPages(upstream, V.RentalQuoteResponseSchema, a);
       if (
         a.user.role.name === "SUCURSAL_ADMIN" &&
-        quotes.some((q) => q.managingBranchId !== null && q.managingBranchId !== a.branchId)
+        quotes.some((q) => q.managingBranchId != null && q.managingBranchId !== a.branchId)
       )
         fail("El listado contiene cotizaciones de otra sucursal.");
       if (
-        a.user.role.name === "CAJERO" &&
-        quotes.some((q) => q.status !== "APPROVED" || Date.parse(q.expiresAt) <= Date.now())
-      )
-        fail("El servicio no devolvió cotizaciones cobrables.", 502);
-      if (
         a.user.role.name === "CUSTOMER" &&
         a.user.customerId != null &&
-        quotes.some((q) => q.customerId !== a.user.customerId)
+        quotes.some((q) => q.customerId != null && q.customerId !== a.user.customerId)
       )
         fail("El listado contiene cotizaciones de otro Customer.");
       return NextResponse.json(quotes.map((q) => projection(q, a)));
@@ -271,13 +294,13 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
       const a = await operationsAccess(request, ["CUSTOMER"]),
         input = await body(request, V.CheckedRentalQuoteInputSchema);
       const q = serviceResult(
-        V.RentalQuoteSchema,
+        V.RentalQuoteResponseSchema,
         await command(request, "rental-quotes", a, input),
       );
       if (
         q.status !== "PENDING_APPROVAL" ||
         q.busTypeId !== input.busTypeId ||
-        (a.user.customerId != null && q.customerId !== a.user.customerId)
+        (a.user.customerId != null && q.customerId != null && q.customerId !== a.user.customerId)
       )
         fail("No se pudo confirmar tu solicitud.", 502);
       return NextResponse.json(projection(q, a), { status: 201 });
@@ -287,9 +310,35 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
         input = await body(request, V.AdminQuoteInputSchema);
       if (a.branchId && input.managingBranchId !== a.branchId)
         fail("La gestora debe ser tu sucursal seleccionada.");
+      const {
+        nit,
+        contactEmail,
+        origin,
+        destination,
+        departureAt,
+        returnDepartureAt,
+        passengerCount,
+        busTypeId,
+        waitHours,
+        priceComponents,
+        ...approval
+      } = input;
       const q = serviceResult(
-        V.RentalQuoteSchema,
-        await command(request, "rental-quotes/admin", a, input),
+        V.RentalQuoteResponseSchema,
+        await command(request, "rental-quotes/admin", a, {
+          customerNit: nit,
+          ...(contactEmail ? { contactEmail } : {}),
+          request: {
+            origin,
+            destination,
+            departureAt,
+            returnDepartureAt,
+            passengerCount,
+            busTypeId,
+            waitHours,
+          },
+          approval: { ...approval, additionalCosts: priceComponents },
+        }),
       );
       if (
         q.status !== "APPROVED" ||
@@ -324,9 +373,13 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
             Date.parse(input.returnArrivalEstimateAt) <= Date.parse(existing.returnDepartureAt)))
       )
         fail("Revisa kilómetros y horarios de ambos tramos.", 400);
+      const { priceComponents, ...approval } = input;
       const updated = serviceResult(
-        V.RentalQuoteSchema,
-        await command(request, `rental-quotes/${qid}/approve`, a, input),
+        V.RentalQuoteResponseSchema,
+        await command(request, `rental-quotes/${qid}/approve`, a, {
+          ...approval,
+          additionalCosts: priceComponents,
+        }),
       );
       if (
         updated.quoteId !== qid ||
@@ -359,10 +412,7 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
     }
     if (path === "contracts" && method === "GET") {
       const a = await operationsAccess(request, ["CUSTOMER"]);
-      const rentals = serviceResult(
-        V.RentalContractSchema.array(),
-        await transportService("rentals/me", a),
-      );
+      const rentals = await allPages("rentals/me", V.RentalContractSchema, a);
       if (a.user.customerId != null && rentals.some((r) => r.customerId !== a.user.customerId))
         fail("El listado no corresponde a tu Customer.");
       return NextResponse.json(rentals);
@@ -385,7 +435,7 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
         r = await contract(rid, a),
         q = await quote(r.quoteId, a),
         input = await body(request, V.RentalAssignSchema);
-      if (r.status !== "PAID" || r.legs.some((l) => l.departure !== null))
+      if (r.status !== "PAID" || r.legs.some((l) => l.status !== "SCHEDULED"))
         fail("Solo se asignan recursos a un alquiler pagado sin iniciar.", 409);
       if (!!input.return !== r.legs.some((l) => l.legType === "RETURN"))
         fail("Debes asignar exactamente los tramos contratados.", 400);
@@ -465,7 +515,7 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
         input = await body(request, V.RentalCancelSchema);
       if (a.user.role.name === "CUSTOMER" && input.cause !== "VOLUNTARY")
         fail("Tu cuenta solo puede solicitar cancelación voluntaria.");
-      if (r.legs.some((l) => l.departure !== null))
+      if (r.legs.some((l) => l.status !== "SCHEDULED"))
         fail("No se puede cancelar el alquiler después de iniciar alguno de sus tramos.", 409);
       const preview = r.cancellationPreview?.[input.cause];
       if (!preview?.eligible)

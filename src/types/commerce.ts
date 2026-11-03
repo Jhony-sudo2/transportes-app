@@ -8,10 +8,9 @@ export interface SeatCell extends SeatPosition {
 }
 export interface TripSeatMap {
   tripId: number;
-  busId: number;
   seatRows: number;
   seatColumns: number;
-  capacity: number;
+  seatLayoutRevision: number;
   seats: SeatCell[];
 }
 export interface SeatHold {
@@ -47,9 +46,9 @@ export interface CommerceInvoice {
   sourceBranchId: number | null;
   revenueBranchId: number;
   sellerUserId: number | null;
-  state: "PAID" | "CANCELLED";
-  typeInvoice: "TICKET_PAYMENT" | "RENTAL_PAYMENT";
-  contactEmailStatus: string;
+  state?: "PAID" | "CANCELLED" | undefined;
+  typeInvoice?: "TICKET_PAYMENT" | "RENTAL_PAYMENT" | undefined;
+  contactEmailStatus?: string | undefined;
   refundedAmount?: number | null | undefined;
   rentalId?: number | null | undefined;
   quoteId?: number | null | undefined;
@@ -60,12 +59,9 @@ export interface InvoiceTicket extends PaymentTicket {
   cancelled: boolean;
   cancellationPreview?: CancellationPreview | undefined;
 }
-export interface CancellationPreview {
-  eligible: boolean;
-  amount: number;
-  appliedPercent: number;
-  reason?: string | null | undefined;
-}
+export type CancellationPreview =
+  | { eligible: true; amount: number; appliedPercent: number; reason?: string | null | undefined }
+  | { eligible: false; reason: string };
 export interface CommerceReceipt {
   invoice: CommerceInvoice;
   tickets: InvoiceTicket[];
@@ -129,7 +125,7 @@ export interface WalletRecharge {
 }
 export interface RefundRecord {
   refundId: number;
-  invoiceId: number;
+  invoiceId?: number | undefined;
   ticketId: number | null;
   rentalId: number | null;
   refundCode: string;
@@ -142,6 +138,15 @@ export interface RefundRecord {
   paidBranchId?: number | null | undefined;
   processedByUserId?: number | null | undefined;
   reason?: string | null | undefined;
+}
+export interface RefundClaim extends RefundRecord {
+  tripId?: number | null | undefined;
+  seatRow?: number | null | undefined;
+  seatColumn?: number | null | undefined;
+  holderName: string;
+  operationBranchId: number;
+  cashSettleable: boolean;
+  requiredChecks: string[];
 }
 export interface CancellationPolicy {
   cutoffMinutes: number;
@@ -156,4 +161,8 @@ export interface TicketCancellation {
 export interface SeatRestriction {
   restrictionId: number;
   isActive: boolean;
+}
+export interface RestrictionTrip {
+  tripId: number;
+  departureAt: string;
 }

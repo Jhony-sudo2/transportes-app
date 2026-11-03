@@ -2,14 +2,17 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useCustomerData } from "@/hooks/useCustomerData";
-import { RestrictionInputSchema, RestrictionResultSchema } from "@/lib/validators/commerce";
-import { TripListSchema } from "@/lib/validators/journey";
+import {
+  RestrictionInputSchema,
+  RestrictionResultSchema,
+  RestrictionTripSchema,
+} from "@/lib/validators/commerce";
 import { BusListSchema } from "@/lib/validators/fleet-resources";
 import { OperationForm } from "./OperationForm";
 import { CustomerDataState } from "./CustomerDataState";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-const contextSchema = z.object({ trips: TripListSchema, buses: BusListSchema });
+const contextSchema = z.object({ trips: RestrictionTripSchema.array(), buses: BusListSchema });
 export function SeatRestrictions({
   userId,
   branchId,
@@ -28,12 +31,10 @@ export function SeatRestrictions({
   const options =
     scope === "BUS"
       ? context.data?.buses.map((b) => ({ value: String(b.id), label: b.plateNumber }))
-      : context.data?.trips
-          .filter((t) => t.status === "SCHEDULED")
-          .map((t) => ({
-            value: String(t.tripId),
-            label: `Viaje #${t.tripId} · ${t.scheduledDepartureAt}`,
-          }));
+      : context.data?.trips.map((t) => ({
+          value: String(t.tripId),
+          label: `Viaje #${t.tripId} · ${t.departureAt}`,
+        }));
   return (
     <div className="space-y-6">
       <CustomerDataState loading={context.loading} error={context.error} retry={context.refresh} />

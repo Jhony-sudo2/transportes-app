@@ -57,10 +57,12 @@ export interface TripRecord {
 export interface TripOffer {
   tripId: number;
   routeId: number;
+  originBranchId: number;
+  destinationBranchId: number;
   busId: number;
   departureAt: string;
   price: number;
-  seatsAvailable: number;
+  seatsAvailable: number | null;
 }
 export interface JourneyWorkspace {
   branchId: number;

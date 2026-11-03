@@ -136,10 +136,12 @@ export const TripListSchema = z.array(TripRecordSchema);
 export const TripOfferSchema = z.object({
   tripId: id,
   routeId: id,
+  originBranchId: id,
+  destinationBranchId: id,
   busId: id,
   departureAt: BusinessInstantSchema,
   price: MoneyInputSchema,
-  seatsAvailable: z.number().int().nonnegative().safe(),
+  seatsAvailable: z.number().int().nonnegative().safe().nullable(),
 }) satisfies z.ZodType<TripOffer, z.ZodTypeDef, unknown>;
 export const TripOffersSchema = z.array(TripOfferSchema);
 export const TripDriverUpdateSchema = z

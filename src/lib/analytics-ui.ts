@@ -19,6 +19,7 @@ export const reportColumns: Record<string, string> = {
   channel: "Canal",
   kind: "Tipo",
   branchId: "Sucursal",
+  sourceBranchId: "Sucursal de venta",
   branchName: "Sucursal",
   invoiceId: "Factura",
   tripId: "Viaje",

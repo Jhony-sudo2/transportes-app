@@ -158,11 +158,11 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
   });
   it("resuelve la capacidad contractual del tipo en lugar de multiplicar filas y columnas", async () => {
     mocks.fetch.mockResolvedValueOnce(Response.json([wireType]));
-    expect((await getBusTypeForUnit("token", 1, 12, 4)).capacity).toBe(40);
+    expect((await getBusTypeForUnit("token", 1, 9, 4)).capacity).toBe(40);
   });
   it.each([
     { id: 999, rows: 12, active: true },
-    { id: 1, rows: 1, active: true },
+    { id: 1, rows: 11, active: true },
     { id: 1, rows: 12, active: false },
   ])("rechaza tipo o distribución incompatible %j", async ({ id, rows, active }) => {
     mocks.fetch.mockResolvedValueOnce(Response.json([{ ...wireType, active }]));
@@ -170,7 +170,7 @@ describe("Fase 2: tipos de bus, ámbito y contratos administrativos", () => {
   });
   it("conserva un tipo inactivo ya asignado al editar", async () => {
     mocks.fetch.mockResolvedValueOnce(Response.json([{ ...wireType, active: false }]));
-    expect((await getBusTypeForUnit("token", 1, 12, 4, 1)).active).toBe(false);
+    expect((await getBusTypeForUnit("token", 1, 10, 4, 1)).active).toBe(false);
   });
   it("solicita habilitación de sucursal sin inventar responsables", async () => {
     mocks.fetch.mockResolvedValueOnce(Response.json({ id: 1, name: "Central", active: true }));

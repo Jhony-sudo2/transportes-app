@@ -26,10 +26,12 @@ export function CommercePurchases() {
           >
             <h2 className="text-xl font-semibold">Factura #{i.invoiceId}</h2>
             <p>
-              {i.paymentDate} · {i.typeInvoice === "TICKET_PAYMENT" ? "Boletos" : "Alquiler"}
+              {i.paymentDate}
+              {i.typeInvoice && ` · ${i.typeInvoice === "TICKET_PAYMENT" ? "Boletos" : "Alquiler"}`}
             </p>
             <p>
-              Q{i.totalAmount.toFixed(2)} · {i.state === "PAID" ? "Pagada" : "Cancelada"}
+              Q{i.totalAmount.toFixed(2)}
+              {i.state && ` · ${i.state === "PAID" ? "Pagada" : "Cancelada"}`}
             </p>
             <p>NIT: {i.customerNit}</p>
             <Link

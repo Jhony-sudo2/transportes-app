@@ -18,11 +18,11 @@ export async function getBusTypeForUnit(
       422,
       "El tipo de bus seleccionado no está disponible.",
     );
-  if (type.capacity > rows * columns)
+  if (rows * columns > type.capacity)
     throw new ApplicationError(
       "domain.invariant_violated",
       422,
-      "La distribución no alcanza la capacidad del tipo de bus seleccionado.",
+      "La distribución supera la capacidad del tipo de bus seleccionado.",
     );
   return type;
 }

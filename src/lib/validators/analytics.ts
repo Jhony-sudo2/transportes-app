@@ -29,6 +29,8 @@ export const ReportRowSchema = z
     channel: text,
     kind: text,
     branchId: id.nullish(),
+    sourceBranchId: id.nullish(),
+    originBranchId: id.nullish(),
     branchName: text,
     invoiceId: id.nullish(),
     tripId: id.nullish(),
@@ -88,10 +90,21 @@ export const ReportRowSchema = z
     (row) => Object.values(row).some((value) => value !== undefined && value !== null),
     "El reporte no contiene ninguna columna reconocida",
   );
+export const ReportRowResponseSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const row = raw as Record<string, unknown>;
+  return {
+    ...row,
+    occurredAt: row.occurredAt ?? row.date,
+    customerName: row.customerName ?? row.customer,
+    distanceKm: row.distanceKm ?? row.kmDistance,
+    ratePerKmApplied: row.ratePerKmApplied ?? row.depreciationRateApplied,
+  };
+}, ReportRowSchema);
 export const ReportBranchSchema = z.object({
   branchId: id,
   branchName: z.string().optional(),
-  entries: z.array(ReportRowSchema),
+  entries: z.array(ReportRowResponseSchema),
   subtotal: DecimalStringSchema,
 });
 export const ReportProfitSchema = z.object({
@@ -114,15 +127,32 @@ export const ReportDemandSchema = z.array(
     soldNotCancelledCount: z.number().int().nonnegative().safe(),
   }),
 );
+export const ReportDemandResponseSchema = z.object({
+  report: z.literal("routes-demand"),
+  rows: ReportDemandSchema,
+});
 export const ReportCategorySchema = z.object({
   categories: z.array(
     z.object({
       categoryId: id,
       categoryName: z.string(),
-      lines: z.array(ReportRowSchema),
+      lines: z.array(ReportRowResponseSchema),
       subtotal: DecimalStringSchema,
     }),
   ),
+  grandTotal: DecimalStringSchema,
+});
+export const ReportCategoryResponseSchema = z.object({
+  report: z.enum(["workshop-categories", "WORKSHOP"]),
+  filters: z.object({ branchId: id.nullish() }),
+  rows: ReportCategorySchema.shape.categories,
+  grandTotal: DecimalStringSchema,
+});
+export const ReportBranchOperationsResponseSchema = z.object({
+  report: z.enum(["TICKET_SALES", "RENTALS", "DEPRECIATION"]),
+  filters: z.object({ branchId: id }),
+  rows: z.array(ReportRowResponseSchema),
+  subtotals: z.record(DecimalStringSchema),
   grandTotal: DecimalStringSchema,
 });
 export const ReportMapSchema = z.array(
@@ -138,6 +168,11 @@ export const ReportMapSchema = z.array(
     }),
   }),
 );
+export const ReportMapResponseSchema = z.object({
+  report: z.literal("route-map"),
+  filters: z.object({ branchId: id }),
+  rows: ReportMapSchema,
+});
 export const AnalyticsReportSchema = z.object({
   kind: ReportKindSchema,
   sections: z.array(

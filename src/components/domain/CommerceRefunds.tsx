@@ -2,23 +2,106 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useCustomerData, readCustomerResponse } from "@/hooks/useCustomerData";
-import { RefundSchema, CashSettleInputSchema } from "@/lib/validators/commerce";
-import type { RefundRecord } from "@/types/commerce";
+import { RefundSchema, RefundClaimSchema, CashSettleInputSchema } from "@/lib/validators/commerce";
+import type { RefundClaim, RefundRecord } from "@/types/commerce";
 import { OperationForm } from "./OperationForm";
 import { CustomerDataState } from "./CustomerDataState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 const refundListSchema = RefundSchema.array();
+const checkLabels: Record<string, string> = {
+  REFUND_CODE_PRESENTED: "Verifiqué que se presentó el comprobante con este código",
+  HOLDER_IDENTITY_VERIFIED: "Verifiqué presencialmente la identidad del titular",
+};
+function CashClaimPayment({
+  claim,
+  userId,
+  onSaved,
+}: {
+  claim: RefundClaim;
+  userId: number;
+  onSaved: () => void;
+}) {
+  const [verified, setVerified] = useState<string[]>([]);
+  const checks = [...new Set(claim.requiredChecks)];
+  const unknownCheck = checks.some((check) => !checkLabels[check]);
+  const ready =
+    claim.cashSettleable && !unknownCheck && checks.every((check) => verified.includes(check));
+  return (
+    <div className="space-y-4">
+      <p>
+        Código del comprobante: <strong>{claim.refundCode}</strong>
+      </p>
+      <p>Sucursal pagadora: #{claim.operationBranchId}</p>
+      <fieldset className="space-y-3">
+        <legend className="mb-3 font-semibold">Comprobaciones presenciales</legend>
+        {checks
+          .filter((check) => checkLabels[check])
+          .map((check) => (
+            <label key={check} className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={verified.includes(check)}
+                onChange={(event) => {
+                  setVerified((current) =>
+                    event.target.checked
+                      ? [...current, check]
+                      : current.filter((item) => item !== check),
+                  );
+                }}
+              />
+              {checkLabels[check]}
+            </label>
+          ))}
+      </fieldset>
+      {unknownCheck && (
+        <p role="alert">
+          El servicio requiere una comprobación adicional que esta pantalla aún no admite. Consulta
+          al administrador antes de entregar efectivo.
+        </p>
+      )}
+      {!claim.cashSettleable && (
+        <p role="status">
+          Este reembolso no está habilitado para pago en efectivo. Consulta su estado antes de
+          entregar dinero.
+        </p>
+      )}
+      {!ready && !unknownCheck && claim.cashSettleable && (
+        <p className="text-sm">Completa las comprobaciones antes de registrar la entrega.</p>
+      )}
+      {ready && (
+        <OperationForm
+          scope={`refund-cash:${userId}:${claim.refundId}`}
+          path={`/api/commerce/refunds/${claim.refundId}/settle-cash`}
+          schema={CashSettleInputSchema.extend({ code: z.string().min(1) })}
+          resultSchema={RefundSchema}
+          base={{ code: claim.refundCode }}
+          fields={[
+            {
+              name: "delivered",
+              label: "Confirmo la entrega física del efectivo",
+              type: "checkbox",
+            },
+          ]}
+          label="Registrar pago en efectivo"
+          confirmation="Confirmo una única entrega por el importe del reembolso."
+          onSaved={onSaved}
+        />
+      )}
+    </div>
+  );
+}
 function RefundCard({
   refund,
   userId,
-  cash = false,
+  claim,
   onSaved,
 }: {
   refund: RefundRecord;
   userId: number;
-  cash?: boolean;
+  claim?: RefundClaim;
   onSaved: () => void;
 }) {
   const [instructions, setInstructions] = useState(false),
@@ -27,9 +110,24 @@ function RefundCard({
     <article className="space-y-4 rounded-2xl border border-[var(--tg-line)] p-6">
       <h2 className="text-xl font-semibold">Reembolso #{refund.refundId}</h2>
       <p>
-        Factura #{refund.invoiceId} ·{" "}
+        {refund.invoiceId != null && `Factura #${refund.invoiceId} · `}
         {refund.ticketId ? `Boleto #${refund.ticketId}` : `Alquiler #${refund.rentalId}`}
       </p>
+      {claim && (
+        <div className="space-y-2">
+          <p>
+            Titular: <strong>{claim.holderName}</strong>
+          </p>
+          {claim.tripId != null && (
+            <p>
+              Viaje #{claim.tripId}
+              {claim.seatRow != null &&
+                claim.seatColumn != null &&
+                ` · Fila ${claim.seatRow}, asiento ${claim.seatColumn}`}
+            </p>
+          )}
+        </div>
+      )}
       <p className="text-2xl font-semibold">Q{refund.amount.toFixed(2)}</p>
       <p>
         Porcentaje reconocido: {refund.appliedPercent}% ·{" "}
@@ -45,33 +143,15 @@ function RefundCard({
       )}
       {refund.status === "PENDING" && (
         <>
-          {cash ? (
-            <>
-              <p>
-                Código del comprobante: <strong>{refund.refundCode}</strong>. Verifica físicamente
-                la identidad y el comprobante antes de entregar el dinero.
-              </p>
-              <OperationForm
-                scope={`refund-cash:${userId}:${refund.refundId}`}
-                path={`/api/commerce/refunds/${refund.refundId}/settle-cash`}
-                schema={CashSettleInputSchema.extend({ code: z.string().min(1) })}
-                resultSchema={RefundSchema}
-                base={{ code: refund.refundCode }}
-                fields={[
-                  {
-                    name: "delivered",
-                    label: "Verifiqué el comprobante y confirmo la entrega física del efectivo",
-                    type: "checkbox",
-                  },
-                ]}
-                label="Registrar pago en efectivo"
-                confirmation="Confirmo una única entrega por el importe del reembolso."
-                onSaved={() => {
-                  setNotice("Pago en efectivo confirmado.");
-                  onSaved();
-                }}
-              />
-            </>
+          {claim ? (
+            <CashClaimPayment
+              claim={claim}
+              userId={userId}
+              onSaved={() => {
+                setNotice("Pago en efectivo confirmado.");
+                onSaved();
+              }}
+            />
           ) : (
             <>
               <Button variant="outline" onClick={() => setInstructions(!instructions)}>
@@ -137,7 +217,7 @@ export function CommerceRefunds({ userId, refundId }: { userId: number; refundId
 }
 export function CashRefunds({ userId }: { userId: number }) {
   const [code, setCode] = useState(""),
-    [refund, setRefund] = useState<RefundRecord | null>(null),
+    [refund, setRefund] = useState<RefundClaim | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(false);
   async function search() {
@@ -145,7 +225,7 @@ export function CashRefunds({ userId }: { userId: number }) {
     setError("");
     setRefund(null);
     try {
-      const result = RefundSchema.parse(
+      const result = RefundClaimSchema.parse(
         await readCustomerResponse(
           await fetch(`/api/commerce/refunds/claim?code=${encodeURIComponent(code.trim())}`, {
             cache: "no-store",
@@ -178,6 +258,7 @@ export function CashRefunds({ userId }: { userId: number }) {
               setRefund(null);
             }}
             maxLength={48}
+            disabled={loading}
           />
         </div>
         <Button disabled={loading || !code.trim()}>Consultar devolución</Button>
@@ -187,7 +268,15 @@ export function CashRefunds({ userId }: { userId: number }) {
         No se muestran listas de clientes ajenos.
       </p>
       {error && <p role="alert">{error}</p>}
-      {refund && <RefundCard refund={refund} userId={userId} cash onSaved={() => void search()} />}
+      {refund && (
+        <RefundCard
+          key={`${refund.refundId}:${refund.refundCode}`}
+          refund={refund}
+          claim={refund}
+          userId={userId}
+          onSaved={() => void search()}
+        />
+      )}
     </div>
   );
 }

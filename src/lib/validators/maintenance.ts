@@ -27,3 +27,6 @@ export const WorkshopServiceSchema = WorkshopInputSchema.extend({
   workshopServiceId: id,
   totalAmount: money,
 }).strip() satisfies z.ZodType<M.WorkshopService, z.ZodTypeDef, unknown>;
+export const WorkshopServiceResponseSchema = WorkshopServiceSchema.extend({
+  lines: z.array(WorkshopLineSchema.strip()).min(1).max(100),
+});

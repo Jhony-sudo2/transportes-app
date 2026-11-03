@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { branchJourneyAccess, ownRoute, confirmedTrip } from "@/lib/api/journey";
+import {
+  branchJourneyAccess,
+  branchOperatingTrips,
+  ownRoute,
+  confirmedTrip,
+} from "@/lib/api/journey";
 import {
   checkedBody,
   requireSameOrigin,
   serviceResult,
   transportService,
 } from "@/lib/api/transport-service";
-import { TripScheduleInputSchema, TripListSchema } from "@/lib/validators/journey";
+import { TripScheduleInputSchema } from "@/lib/validators/journey";
 import { BusListSchema, DriverListSchema } from "@/lib/validators/fleet-resources";
 import { busAvailability, driverAvailability } from "@/lib/fleet-availability";
 import { adminErrorResponse } from "@/lib/api/admin";
@@ -14,10 +19,7 @@ import { ApplicationError } from "@/types/error";
 export async function GET(request: NextRequest) {
   try {
     const access = await branchJourneyAccess(Number(request.nextUrl.searchParams.get("branchId")));
-    const trips = serviceResult(
-      TripListSchema,
-      await transportService(`trips?originBranchId=${access.branchId}&tripType=REGULAR`, access),
-    );
+    const trips = await branchOperatingTrips(access, "REGULAR");
     if (
       trips.some(
         (trip) =>

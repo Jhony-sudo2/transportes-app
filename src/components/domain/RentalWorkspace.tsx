@@ -91,12 +91,23 @@ function approvalFields(context: Context, branchId?: number, hasReturn = false):
         ]
       : []),
     {
-      name: "driverBaseSalary",
-      label: "Salario base sugerido por tramo (Q)",
+      name: "outboundDriverBaseSalary",
+      label: "Salario base de ida (Q)",
       type: "number",
       optional: true,
       min: 0,
     },
+    ...(hasReturn
+      ? [
+          {
+            name: "returnDriverBaseSalary",
+            label: "Salario base de retorno (Q)",
+            type: "number" as const,
+            optional: true,
+            min: 0,
+          },
+        ]
+      : []),
     {
       name: "finalPrice",
       label: "Precio final total aprobado (Q)",
@@ -104,9 +115,36 @@ function approvalFields(context: Context, branchId?: number, hasReturn = false):
       min: 0.01,
       step: "0.01",
     },
+    {
+      name: "priceJustification",
+      label: "Justificación si el precio difiere del costo estimado",
+      type: "textarea",
+      optional: true,
+    },
   ];
 }
 export function RentalWorkspace({
+  userId,
+  role,
+  branchId,
+  contractBase,
+}: {
+  userId: number;
+  role: string;
+  branchId?: number;
+  contractBase: string;
+}) {
+  if (role === "CAJERO") return <CashierQuoteWorkspace userId={userId} />;
+  return (
+    <RentalWorkspaceBody
+      userId={userId}
+      role={role}
+      {...(branchId ? { branchId } : {})}
+      contractBase={contractBase}
+    />
+  );
+}
+function RentalWorkspaceBody({
   userId,
   role,
   branchId,
@@ -158,8 +196,11 @@ export function RentalWorkspace({
           type: "select",
           numeric: true,
           choices: context.data.busTypes
-            .filter((t) => t.active)
-            .map((t) => ({ value: String(t.id), label: `${t.name} · ${t.capacity} pasajeros` })),
+            .filter((t) => t.active !== false)
+            .map((t) => ({
+              value: String(t.id),
+              label: `${t.name} · ${t.capacity} pasajeros${t.availabilityHint === "NONE" ? " · Sin disponibilidad" : t.availabilityHint === "UNKNOWN" ? " · Disponibilidad por confirmar" : ""}`,
+            })),
         },
         { name: "waitHours", label: "Horas de espera", type: "number", value: 0, min: 0 },
         ...(admin
@@ -308,6 +349,145 @@ export function RentalWorkspace({
     </div>
   );
 }
+function CashierQuoteWorkspace({ userId }: { userId: number }) {
+  const [reference, setReference] = useState("");
+  const [notice, setNotice] = useState("");
+  return (
+    <div className="space-y-6">
+      <p>Busca la referencia exacta de la cotización aprobada para consultar su precio.</p>
+      <form
+        className="flex flex-wrap gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setReference(String(new FormData(event.currentTarget).get("reference") ?? "").trim());
+          setNotice("");
+        }}
+      >
+        <Input
+          name="reference"
+          aria-label="Referencia exacta de cotización"
+          maxLength={32}
+          required
+        />
+        <Button>Consultar cobrables</Button>
+      </form>
+      {notice && (
+        <p role="status" className="tg-notice">
+          {notice}
+        </p>
+      )}
+      {reference && (
+        <CashierQuoteResults
+          key={reference}
+          reference={reference}
+          userId={userId}
+          onNotice={setNotice}
+        />
+      )}
+    </div>
+  );
+}
+function CashierQuoteResults({
+  reference,
+  userId,
+  onNotice,
+}: {
+  reference: string;
+  userId: number;
+  onNotice: (value: string) => void;
+}) {
+  const quotes = useCustomerData(
+    `/api/rentals/quotes?reference=${encodeURIComponent(reference)}`,
+    V.PayableQuoteSchema.array(),
+  );
+  return (
+    <div className="space-y-5">
+      <CustomerDataState loading={quotes.loading} error={quotes.error} retry={quotes.refresh} />
+      {quotes.data?.length === 0 && (
+        <p>No se encontró una cotización cobrable con esa referencia.</p>
+      )}
+      {quotes.data?.map((quote) => (
+        <CashierQuoteCard
+          key={quote.quoteId}
+          quote={quote}
+          userId={userId}
+          onSaved={(payment) => {
+            onNotice(
+              `Pago confirmado en la factura #${payment.invoiceId}. Consulta su comprobante antes de repetir el cobro.`,
+            );
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+function CashierQuoteCard({
+  quote,
+  userId,
+  onSaved,
+}: {
+  quote: import("@/types/rentals").PayableQuote;
+  userId: number;
+  onSaved: (payment: RentalPayment) => void;
+}) {
+  const key = `transport:rental-paid:${userId}:${quote.quoteId}`;
+  const [payment, setPayment] = useState<RentalPayment | null>(null);
+  const [recoveryError, setRecoveryError] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const parsed = V.RentalPaymentSchema.safeParse(JSON.parse(raw));
+        if (parsed.success) setPayment(parsed.data);
+        else setRecoveryError(true);
+      }
+    } catch {
+      setRecoveryError(true);
+    }
+  }, [key]);
+  return (
+    <article className="space-y-4 rounded-2xl border border-[var(--tg-line)] p-6">
+      <h2 className="text-xl font-semibold">Cotización #{quote.quoteId}</h2>
+      <p>
+        NIT: {quote.customerNit} · Precio global: Q{quote.finalPrice.toFixed(2)}
+      </p>
+      <p>Vence: {displayInstant(quote.expiresAt)}</p>
+      {recoveryError ? (
+        <p role="alert">Consulta el estado del pago antes de intentar cobrar nuevamente.</p>
+      ) : payment ? (
+        <Link className="underline" href={`/receipts/${payment.invoiceId}`}>
+          Ver comprobante
+        </Link>
+      ) : Date.parse(quote.expiresAt) <= Date.now() ? (
+        <p>La cotización venció. Consulta nuevamente su estado.</p>
+      ) : (
+        <OperationForm
+          scope={`quote-pay:${userId}:${quote.quoteId}`}
+          path="/api/rentals/payments"
+          schema={V.RentalPaymentInputSchema}
+          resultSchema={V.RentalPaymentSchema}
+          base={{ quoteId: quote.quoteId }}
+          fields={[
+            { name: "paymentDate", label: "Fecha de pago", type: "date", value: guatemalaDate() },
+            {
+              name: "contactEmail",
+              label: "Correo de entrega si el comprador no tiene cuenta",
+              type: "email",
+              optional: true,
+            },
+          ]}
+          label="Confirmar cobro en efectivo"
+          confirmation="Confirmo la recepción del efectivo por el precio global aprobado."
+          onSaved={(result) => {
+            sessionStorage.setItem(key, JSON.stringify(result));
+            setPayment(result);
+            onSaved(result);
+          }}
+        />
+      )}
+    </article>
+  );
+}
 function QuoteCard({
   quote: q,
   context,
@@ -349,7 +529,7 @@ function QuoteCard({
   return (
     <article className="space-y-5 rounded-2xl border border-[var(--tg-line)] bg-[var(--tg-paper)] p-6">
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="text-xl font-semibold">Cotización #{q.quoteId}</h2>
+        <h2 className="text-xl font-semibold">Cotización {q.quoteReference ?? `#${q.quoteId}`}</h2>
         <span>{paymentConfirmed ? "Pago confirmado" : stateLabels[q.status]}</span>
       </div>
       <p>
@@ -627,36 +807,37 @@ export function RentalContractView({
                 )}
             </article>
           ))}
-          {rental.data.status === "PAID" && rental.data.legs.every((l) => !l.departure) && (
-            <>
-              {admin && context.data && (
-                <RentalAssignment
-                  rental={rental.data}
-                  context={context.data}
-                  userId={userId}
-                  {...(branchId ? { branchId } : {})}
-                  onSaved={() => saved("Recursos confirmados para los tramos contratados.")}
-                />
-              )}
-              <details>
-                <summary className="cursor-pointer underline">Cancelar alquiler completo</summary>
-                <div className="mt-4 space-y-4">
-                  <p>
-                    La cancelación voluntaria usa el porcentaje global vigente y no el corte de
-                    minutos del boleto. La cancelación empresarial autorizada reconoce el 100%.
-                    Ninguna entrega se realiza al crear el derecho.
-                  </p>
-                  <RentalCancellation
+          {rental.data.status === "PAID" &&
+            rental.data.legs.every((l) => l.status === "SCHEDULED") && (
+              <>
+                {admin && context.data && (
+                  <RentalAssignment
                     rental={rental.data}
+                    context={context.data}
                     userId={userId}
-                    admin={admin}
-                    query={query}
-                    saved={saved}
+                    {...(branchId ? { branchId } : {})}
+                    onSaved={() => saved("Recursos confirmados para los tramos contratados.")}
                   />
-                </div>
-              </details>
-            </>
-          )}
+                )}
+                <details>
+                  <summary className="cursor-pointer underline">Cancelar alquiler completo</summary>
+                  <div className="mt-4 space-y-4">
+                    <p>
+                      La cancelación voluntaria usa el porcentaje global vigente y no el corte de
+                      minutos del boleto. La cancelación empresarial autorizada reconoce el 100%.
+                      Ninguna entrega se realiza al crear el derecho.
+                    </p>
+                    <RentalCancellation
+                      rental={rental.data}
+                      userId={userId}
+                      admin={admin}
+                      query={query}
+                      saved={saved}
+                    />
+                  </div>
+                </details>
+              </>
+            )}
           {rental.data.status === "CANCELLING" && (
             <p className="tg-notice">
               Cancelación en proceso. Aún no se ha confirmado el cierre comercial.
@@ -871,7 +1052,10 @@ function LegResources({
             const id = Number(e.target.value),
               chosen = resources.data?.buses.find((b) => b.id === id),
               type = context.busTypes.find((t) => t.id === chosen?.busTypeId),
-              amount = type ? String(type.suggestedDriverSalaryPerTrip) : "";
+              amount =
+                type?.suggestedDriverSalaryPerTrip == null
+                  ? ""
+                  : String(type.suggestedDriverSalaryPerTrip);
             setBus(id);
             setSalary(amount);
             update(id, driver, amount);

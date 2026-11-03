@@ -11,9 +11,68 @@ import {
 } from "@/lib/validators/journey";
 import { ManagedBranchIdSchema } from "@/lib/validators/branch-context";
 import { ApplicationError } from "@/types/error";
-import { BranchListSchema, getBranchCoordinate } from "@/lib/validators/branch";
+import { BranchSchema, getBranchCoordinate } from "@/lib/validators/branch";
+import { PublicBranchCatalogSchema } from "@/lib/validators/branch-context";
 export async function branchJourneyAccess(branchId: number) {
   return requireSelectedBranch(branchId);
+}
+export async function activeBranchDetails(token: string) {
+  const catalog = serviceResult(
+    PublicBranchCatalogSchema,
+    await transportService("branches/catalog"),
+  );
+  return Promise.all(
+    catalog.map(async ({ id }) => {
+      const branch = serviceResult(
+        BranchSchema,
+        await transportService(`branches/${id}`, { token }),
+      );
+      if (branch.id !== id)
+        throw new ApplicationError(
+          "system.internal_error",
+          502,
+          "No se pudo verificar una sucursal del catálogo.",
+        );
+      return branch;
+    }),
+  );
+}
+export async function branchOperatingTrips(
+  access: Awaited<ReturnType<typeof branchJourneyAccess>>,
+  tripType: "REGULAR" | "PRIVATE",
+) {
+  const pageSchema = z.object({
+    content: TripListSchema,
+    page: z.number().int().nonnegative(),
+    size: z.number().int().positive(),
+    totalElements: z.number().int().nonnegative().safe(),
+  });
+  const trips: z.infer<typeof TripRecordSchema>[] = [];
+  let total: number | undefined;
+  for (let page = 0; page < 50; page++) {
+    const result = serviceResult(
+      pageSchema,
+      await transportService(
+        `trips/operations?branchId=${access.branchId}&tripType=${tripType}&page=${page}&size=100`,
+        access,
+      ),
+    );
+    if (result.page !== page || (total !== undefined && total !== result.totalElements))
+      throw new ApplicationError(
+        "system.internal_error",
+        502,
+        "El listado cambió durante la consulta. Actualiza la información.",
+      );
+    total = result.totalElements;
+    trips.push(...result.content);
+    if (trips.length >= total) return trips;
+    if (!result.content.length) break;
+  }
+  throw new ApplicationError(
+    "system.internal_error",
+    502,
+    "No se pudo cargar el listado completo de viajes.",
+  );
 }
 export async function branchRoutes(access: Awaited<ReturnType<typeof branchJourneyAccess>>) {
   const routes = serviceResult(
@@ -44,7 +103,7 @@ export async function ownRoute(
 export async function routeBranches(originId: number, destinationId: number, token: string) {
   if (originId === destinationId)
     throw new ApplicationError("validation.failed", 400, "Origen y destino deben ser diferentes.");
-  const branches = serviceResult(BranchListSchema, await transportService("branches", { token }));
+  const branches = await activeBranchDetails(token);
   for (const id of [originId, destinationId]) {
     const branch = branches.find((item) => item.id === id);
     if (!branch || branch.active !== true || !getBranchCoordinate(branch))
@@ -89,7 +148,7 @@ export async function driverJourneyAccess() {
 export async function driverTrips(access: Awaited<ReturnType<typeof driverJourneyAccess>>) {
   const trips = serviceResult(
     TripListSchema,
-    await transportService(`trips?driverId=${access.driverId}`, access),
+    await transportService(`trips/assigned?driverId=${access.driverId}`, access),
   );
   if (trips.some((trip) => trip.driverId !== access.driverId))
     throw new ApplicationError(

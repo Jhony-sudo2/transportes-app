@@ -5,7 +5,12 @@ import { commerceOperation } from "@/lib/api/commerce-operations";
 import { rentalOperation } from "@/lib/api/rental-operations";
 import { maintenanceOperation } from "@/lib/api/maintenance-operations";
 import { analyticsOperation } from "@/lib/api/analytics-operations";
-import { SeatMapSchema, RefundSchema, CancellationPolicySchema } from "@/lib/validators/commerce";
+import {
+  SeatMapSchema,
+  RefundSchema,
+  PurchaseResponseSchema,
+  CancellationPolicySchema,
+} from "@/lib/validators/commerce";
 import { RentalContractSchema } from "@/lib/validators/rentals";
 import { decimalDisplay } from "@/lib/analytics-ui";
 import { ReportRowSchema } from "@/lib/validators/analytics";
@@ -38,6 +43,34 @@ const invoice = {
   typeInvoice: "TICKET_PAYMENT",
   contactEmailStatus: "VERIFIED",
 };
+it("interpreta facturas y reembolsos con los campos que Commerce publica", () => {
+  const purchase = PurchaseResponseSchema.parse({
+    invoiceId: 10,
+    customerId: 999,
+    customerNit: "1234567",
+    customerName: "Cliente",
+    totalAmount: 75,
+    paymentDate: "2026-11-04",
+    channel: "WEB",
+    sourceBranchId: null,
+    revenueBranchId: 2,
+    tickets: [{ ticketId: 11, tripId: 20, seatRow: 1, seatColumn: 1, amount: 75, state: "PAID" }],
+  });
+  expect(purchase.invoice.sellerUserId).toBeNull();
+  expect(purchase.tickets[0]).toMatchObject({ invoiceId: 10, cancelled: false });
+  expect(purchase.tickets[0]?.cancellationPreview).toBeUndefined();
+  expect(
+    RefundSchema.parse({
+      refundId: 30,
+      refundCode: "R30",
+      ticketId: 11,
+      cause: "VOLUNTARY",
+      appliedPercent: 75,
+      amount: 56.25,
+      status: "PENDING",
+    }),
+  ).toMatchObject({ rentalId: null, method: null, settledAt: null });
+});
 const ticket = {
   ticketId: 11,
   tripId: 20,
@@ -49,14 +82,17 @@ const ticket = {
 };
 const map = {
   tripId: 20,
-  busId: 5,
   seatRows: 1,
   seatColumns: 3,
-  capacity: 2,
+  seatLayoutRevision: 1,
   seats: [
     { row: 1, column: 1, state: "AVAILABLE" },
     { row: 1, column: 2, state: "BLOCKED", reason: "Asiento dañado" },
   ],
+};
+const wireMap = {
+  ...map,
+  seats: map.seats.map(({ state, ...seat }) => ({ ...seat, status: state })),
 };
 const refund = {
   refundId: 30,
@@ -89,6 +125,27 @@ const quote = {
   invoiceId: null,
   estimatedCost: 600,
   priceComponents: [{ description: "Gasto interno", amount: 20 }],
+};
+const wireQuote = {
+  quoteId: quote.quoteId,
+  quoteReference: "TEST-40",
+  customerId: quote.customerId,
+  status: quote.status,
+  expiresAt: quote.expiresAt,
+  finalPrice: quote.finalPrice,
+  managingBranchId: quote.managingBranchId,
+  rentalId: quote.rentalId,
+  estimatedCost: quote.estimatedCost,
+  priceComponents: { additionalCosts: quote.priceComponents },
+  routeSummary: {
+    origin: quote.origin,
+    destination: quote.destination,
+    departureAt: quote.departureAt,
+    returnDepartureAt: null,
+    passengerCount: quote.passengerCount,
+    busTypeId: quote.busTypeId,
+    waitHours: quote.waitHours,
+  },
 };
 const leg = {
   tripId: 50,
@@ -165,12 +222,25 @@ beforeEach(() => {
       const defaults: Record<string, unknown> = {
         "users/7/branches": [2],
         "branches/2": branch,
+        "branches/catalog": [{ branchId: 2, name: "Central" }],
+        trips: [
+          {
+            tripId: 20,
+            routeId: 10,
+            originBranchId: 2,
+            destinationBranchId: 3,
+            busId: 5,
+            departureAt: "2027-01-02T10:00:00Z",
+            price: 50,
+            seatsAvailable: null,
+          },
+        ],
         branches: [branch],
         "wallets/me": { balance: 100, active: true },
         "wallets/me/transactions": [],
-        "payments/me": [invoice],
-        "payments/10/tickets": { invoice, tickets: [ticket] },
-        "seats/trips/20": map,
+        "payments/me": [{ ...invoice, tickets: [{ ...ticket, state: "PAID" }] }],
+        "payments/10/tickets": { ...invoice, tickets: [{ ...ticket, state: "PAID" }] },
+        "seats/trips/20": wireMap,
         "customers/by-nit/1234567": {
           customerId: 999,
           nit: "1234567",
@@ -179,13 +249,22 @@ beforeEach(() => {
           email: "verified@example.com",
         },
         "refunds/me": [refund],
-        "refunds/claim": refund,
+        "refunds/claim": {
+          ...refund,
+          holderName: "Titular",
+          tripId: 20,
+          seatRow: 1,
+          seatColumn: 1,
+          operationBranchId: 2,
+          cashSettleable: true,
+          requiredChecks: ["REFUND_CODE_PRESENTED", "HOLDER_IDENTITY_VERIFIED"],
+        },
         "refunds/30": refund,
-        "rental-quotes/me": [quote],
-        "rental-quotes/admin": [quote],
+        "rental-quotes/me": { content: [wireQuote], page: 0, size: 100, totalElements: 1 },
+        "rental-quotes/admin": { content: [wireQuote], page: 0, size: 100, totalElements: 1 },
         "rental-quotes/payable": [quote],
-        "rental-quotes/40": quote,
-        "rentals/me": [rental],
+        "rental-quotes/40": wireQuote,
+        "rentals/me": { content: [rental], page: 0, size: 100, totalElements: 1 },
         "rentals/60": rental,
         "branches/2/buses": [bus],
         "branches/2/drivers": [
@@ -216,6 +295,31 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
       expect.stringMatching(/wallets\/me\/transactions$/),
     ]);
   });
+  it("muestra movimientos recibidos con transactionId del proveedor", async () => {
+    overrides["GET wallets/me/transactions"] = [
+      {
+        transactionId: 91,
+        transactionType: "USER_RECHARGE",
+        createdAt: "2026-11-04T12:00:00Z",
+        amount: 25,
+        balanceAfter: 125,
+        description: null,
+        paymentDate: "2026-11-04",
+      },
+    ];
+    const response = await commerceOperation(request("wallet"), ["wallet"]);
+    expect(response.status).toBe(200);
+    expect((await response.json()).transactions).toEqual([
+      {
+        id: 91,
+        transactionType: "USER_RECHARGE",
+        createdAt: "2026-11-04T12:00:00Z",
+        amount: 25,
+        balanceAfter: 125,
+        description: null,
+      },
+    ]);
+  });
   it.each(["ADMIN", "SUCURSAL_ADMIN", "DRIVER", "CAJERO"])(
     "rechaza acceso de %s a billetera personal",
     async (role) => {
@@ -226,33 +330,34 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
   );
   it("reenvía sin alterar la llave y el contenido de la recarga", async () => {
     overrides["POST wallets/me/recharges"] = { transactionId: 1, balanceAfter: 125 };
-    const r = await commerceOperation(request("wallet/recharges", { amount: 25 }), [
-      "wallet",
-      "recharges",
-    ]);
+    const r = await commerceOperation(
+      request("wallet/recharges", { amount: 25, paymentDate: "2026-11-04" }),
+      ["wallet", "recharges"],
+    );
     expect(r.status).toBe(201);
     expect(writes()[0]?.[1]).toMatchObject({
       headers: expect.objectContaining({ "Idempotency-Key": key }),
-      body: JSON.stringify({ amount: 25 }),
+      body: JSON.stringify({ amount: 25, paymentDate: "2026-11-04" }),
     });
   });
   it("rechaza una recarga sin llave de operación", async () => {
     expect(
       (
-        await commerceOperation(request("wallet/recharges", { amount: 25 }, "", "POST", null), [
-          "wallet",
-          "recharges",
-        ])
+        await commerceOperation(
+          request("wallet/recharges", { amount: 25, paymentDate: "2026-11-04" }, "", "POST", null),
+          ["wallet", "recharges"],
+        )
       ).status,
     ).toBe(400);
     expect(writes()).toHaveLength(0);
   });
   it.each([
-    { amount: 0 },
-    { amount: -1 },
-    { amount: 1.001 },
-    { amount: 20, ownerId: 99 },
-    { amount: 20, paymentDate: "2026-11-01" },
+    { amount: 0, paymentDate: "2026-11-04" },
+    { amount: -1, paymentDate: "2026-11-04" },
+    { amount: 1.001, paymentDate: "2026-11-04" },
+    { amount: 20, paymentDate: "2026-11-04", ownerId: 99 },
+    { amount: 20 },
+    { amount: 20, paymentDate: "2026-02-30" },
   ])("rechaza monto o autoridad adicional %j", async (body) => {
     expect(
       (await commerceOperation(request("wallet/recharges", body), ["wallet", "recharges"])).status,
@@ -266,6 +371,30 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
     );
     expect(r.status).toBe(409);
     expect(writes()).toHaveLength(0);
+  });
+  it("interpreta el mapa de Commerce y permite un bloqueo sin motivo público", async () => {
+    overrides["GET seats/trips/20"] = {
+      tripId: 20,
+      seatRows: 1,
+      seatColumns: 2,
+      seatLayoutRevision: 7,
+      seats: [
+        { row: 1, column: 1, status: "AVAILABLE" },
+        { row: 1, column: 2, status: "BLOCKED" },
+      ],
+    };
+    const response = await commerceOperation(request("seats/20"), ["seats", "20"]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      tripId: 20,
+      seatRows: 1,
+      seatColumns: 2,
+      seatLayoutRevision: 7,
+      seats: [
+        { row: 1, column: 1, state: "AVAILABLE" },
+        { row: 1, column: 2, state: "BLOCKED" },
+      ],
+    });
   });
   it("no retiene asiento bloqueado aunque el navegador lo seleccione", async () => {
     expect(
@@ -327,6 +456,21 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
       canManageCapital: false,
     });
   });
+  it("consulta viajes públicos de su sucursal sin pedir rutas administrativas", async () => {
+    asRole("CAJERO");
+    const response = await commerceOperation(request("restrictions/context"), [
+      "restrictions",
+      "context",
+    ]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      trips: [{ tripId: 20, departureAt: "2027-01-02T10:00:00Z" }],
+      buses: [],
+    });
+    expect(
+      mocks.fetch.mock.calls.some(([url]) => String(url).includes("/trips?originBranchId=2")),
+    ).toBe(true);
+  });
   it("no acepta que el cajero opere otra sucursal desde query", async () => {
     asRole("CAJERO");
     expect(
@@ -335,7 +479,11 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
   });
   it("rechaza contexto ambiguo si el cajero tiene dos sucursales", async () => {
     asRole("CAJERO");
-    overrides["GET users/7/branches"] = [2, 3];
+    mocks.session.mockResolvedValue({
+      ...user,
+      role: { id: 5, name: "CAJERO" },
+      branchIds: [2, 3],
+    });
     expect((await commerceOperation(request("context"), ["context"])).status).toBe(403);
   });
   it("no da permiso de capital al cajero", async () => {
@@ -435,7 +583,7 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
     );
   });
   it("rechaza compras CF en el historial personal aunque coincida un correo", async () => {
-    overrides["GET payments/me"] = [{ ...invoice, customerNit: "CF" }];
+    overrides["GET payments/me"] = [{ ...invoice, customerNit: "CF", tickets: [] }];
     expect((await commerceOperation(request("invoices/mine"), ["invoices", "mine"])).status).toBe(
       403,
     );
@@ -514,7 +662,26 @@ describe("Etapa 5: obligaciones y liquidaciones independientes", () => {
       ["refunds", "30", "settle-cash"],
     );
     expect(r.status).toBe(200);
-    expect(JSON.parse(writes()[0]?.[1].body)).toEqual({ delivered: true });
+    expect(JSON.parse(writes()[0]?.[1].body)).toEqual({ branchId: 2, delivered: true });
+    expect(
+      mocks.fetch.mock.calls.some(([url]) => String(url).includes("refunds/30?code=EXACT-30")),
+    ).toBe(true);
+  });
+  it("conserva los datos del comprobante y sus verificaciones presenciales", async () => {
+    asRole("CAJERO");
+    const response = await commerceOperation(request("refunds/claim", undefined, "code=EXACT-30"), [
+      "refunds",
+      "claim",
+    ]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      holderName: "Titular",
+      tripId: 20,
+      seatRow: 1,
+      seatColumn: 1,
+      operationBranchId: 2,
+      requiredChecks: ["REFUND_CODE_PRESENTED", "HOLDER_IDENTITY_VERIFIED"],
+    });
   });
   it("rechaza código distinto al comprobante antes de entregar efectivo", async () => {
     asRole("CAJERO");
@@ -568,6 +735,23 @@ describe("Etapa 5: obligaciones y liquidaciones independientes", () => {
   });
 });
 describe("Etapa 6: cotización, pago y contratación", () => {
+  it("lee la política global y admite los metadatos de auditoría de Journey", async () => {
+    asRole("ADMIN");
+    overrides["GET rental-quote-policy"] = {
+      validityDays: 7,
+      waitCostPerHour: 25,
+      updatedByUserId: 1,
+      updatedAt: "2026-11-04T17:00:00Z",
+    };
+    const response = await rentalOperation(request("policy"), ["policy"]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ validityDays: 7, waitCostPerHour: 25 });
+  });
+  it("reserva la lectura de política global para ADMIN", async () => {
+    asRole("SUCURSAL_ADMIN");
+    expect((await rentalOperation(request("policy"), ["policy"])).status).toBe(403);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
   it("el cliente no recibe gastos internos de la cotización", async () => {
     const r = await rentalOperation(request("quotes"), ["quotes"]);
     expect(r.status).toBe(200);
@@ -659,6 +843,42 @@ describe("Etapa 6: cotización, pago y contratación", () => {
   });
 });
 describe("Etapa 7: taller, reportes y precisión", () => {
+  it.each([
+    { routes: [] },
+    {
+      routes: [
+        { routeId: 1, origin: { lat: 14.6, lng: -90.5 }, destination: { lat: 14.7, lng: -90.5 } },
+      ],
+    },
+  ])("lee las rutas desde rows del reporte de Analytics: %j", async ({ routes }) => {
+    asRole("ADMIN");
+    overrides["GET reports/route-map"] = {
+      report: "route-map",
+      filters: { branchId: 2, dateFrom: null, dateTo: null },
+      rows: routes,
+      branches: [],
+      subtotals: {},
+      grandTotal: null,
+    };
+    const response = await analyticsOperation(
+      request("route-map", undefined, "originBranchId=2"),
+      "route-map",
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).mapRoutes).toEqual(routes);
+  });
+  it("rechaza un mapa que Analytics atribuye a otro origen", async () => {
+    asRole("ADMIN");
+    overrides["GET reports/route-map"] = {
+      report: "route-map",
+      filters: { branchId: 3 },
+      rows: [],
+    };
+    expect(
+      (await analyticsOperation(request("route-map", undefined, "originBranchId=2"), "route-map"))
+        .status,
+    ).toBe(502);
+  });
   it("conserva columnas exigidas de cliente/vendedor, flota y tarifa histórica sin exponer DPI", () => {
     const row = ReportRowSchema.parse({
       sellerUserId: 7,
@@ -713,11 +933,20 @@ describe("Etapa 7: taller, reportes y precisión", () => {
       serviceDate: "2026-11-01",
       lines: [{ categoryId: 1, lineType: "LABOR", description: "Revisión", amount: 25 }],
     };
-    overrides["POST workshop-services"] = { ...input, workshopServiceId: 80, totalAmount: 25 };
+    overrides["POST workshop-services"] = {
+      ...input,
+      branchId: 2,
+      workshopServiceId: 80,
+      totalAmount: 25,
+      lines: input.lines.map((line) => ({ ...line, lineId: 1 })),
+    };
     expect(
       (await maintenanceOperation(request("services", input, "branchId=2"), ["services"])).status,
     ).toBe(201);
     expect(JSON.parse(writes()[0]?.[1].body)).toEqual(input);
+    expect(
+      mocks.fetch.mock.calls.some(([url]) => String(url).includes("expense-categories?branchId=2")),
+    ).toBe(true);
   });
   it("no permite registrar una línea sin categoría activa", async () => {
     asRole("SUCURSAL_ADMIN");
@@ -799,11 +1028,14 @@ describe("Etapa 7: taller, reportes y precisión", () => {
     ).toBe(409);
     expect(writes()).toHaveLength(0);
   });
-  it("un mapa con posiciones duplicadas o fuera de capacidad se rechaza", () => {
+  it("un mapa con posiciones duplicadas o fuera de la distribución se rechaza", () => {
     expect(SeatMapSchema.safeParse({ ...map, seats: [map.seats[0], map.seats[0]] }).success).toBe(
       false,
     );
-    expect(SeatMapSchema.safeParse({ ...map, capacity: 4 }).success).toBe(false);
+    expect(
+      SeatMapSchema.safeParse({ ...map, seats: [{ row: 2, column: 1, state: "AVAILABLE" }] })
+        .success,
+    ).toBe(false);
   });
   it.each([
     "/api/commerce/wallet",

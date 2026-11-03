@@ -10,6 +10,7 @@ import { OperationForm } from "./OperationForm";
 import { CustomerDataState } from "./CustomerDataState";
 import { formatCurrency } from "@/lib/utils/format";
 import { transactionLabels } from "@/lib/customer-commerce-ui";
+import { guatemalaDate } from "@/lib/transport-time";
 export function CommerceWallet({ userId }: { userId: number }) {
   const data = useCustomerData("/api/commerce/wallet", WalletOverviewSchema),
     [notice, setNotice] = useState("");
@@ -47,6 +48,12 @@ export function CommerceWallet({ userId }: { userId: number }) {
                     type: "number",
                     min: 0.01,
                     step: "0.01",
+                  },
+                  {
+                    name: "paymentDate",
+                    label: "Fecha de la recarga",
+                    type: "date",
+                    value: guatemalaDate(),
                   },
                 ]}
                 schema={RechargeInputSchema}

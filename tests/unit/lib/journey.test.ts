@@ -143,9 +143,9 @@ describe("Journey: alcance, operación y contratos de la etapa 3", () => {
   });
   it("crea ruta con coordenadas válidas y origen propio", async () => {
     const { routeId: _, ...input } = route;
-    responses([branch, { ...branch, id: 3 }], route);
+    responses([{ branchId: 2, name: "Central" }, { branchId: 3, name: "Otra" }], branch, { ...branch, id: 3 }, route);
     expect((await createRoute(request(input))).status).toBe(201);
-    expect(JSON.parse(mocks.fetch.mock.calls[1]?.[1].body)).toEqual(input);
+    expect(JSON.parse(mocks.fetch.mock.calls[3]?.[1].body)).toEqual(input);
   });
   it.each([
     { originBranchId: 3 },
@@ -165,9 +165,9 @@ describe("Journey: alcance, operación y contratos de la etapa 3", () => {
   });
   it("requiere coordenadas válidas en ambos extremos", async () => {
     const { routeId: _, ...input } = route;
-    responses([branch, { id: 3, name: "Sin coordenadas" }]);
+    responses([{ branchId: 2, name: "Central" }, { branchId: 3, name: "Sin coordenadas" }], branch, { id: 3, name: "Sin coordenadas", active: true });
     expect((await createRoute(request(input))).status).toBe(422);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(3);
   });
   it("conserva conflicto ROUTE_HAS_TRIPS sin borrar ni reintentar", async () => {
     responses(
@@ -223,14 +223,14 @@ describe("Journey: alcance, operación y contratos de la etapa 3", () => {
     expect((await scheduleTrip(request(schedule))).status).toBe(502);
   });
   it("no acepta viajes de otra sede en la lista operativa", async () => {
-    responses([{ ...trip, operatingBranchId: 3 }]);
+    responses({ content: [{ ...trip, operatingBranchId: 3 }], page: 0, size: 100, totalElements: 1 });
     expect((await trips(request())).status).toBe(403);
   });
   it("busca las asignaciones usando ID de Fleet, distinto de User", async () => {
     asDriver();
     responses(driver, [trip]);
     expect(await (await assignedTrips()).json()).toEqual([trip]);
-    expect(mocks.fetch.mock.calls[1]?.[0]).toMatch(/trips\?driverId=8$/);
+    expect(mocks.fetch.mock.calls[1]?.[0]).toMatch(/trips\/assigned\?driverId=8$/);
   });
   it("rechaza un listado con viajes de otro chofer", async () => {
     asDriver();
@@ -344,6 +344,8 @@ describe("Journey: alcance, operación y contratos de la etapa 3", () => {
       {
         tripId: 20,
         routeId: 10,
+        originBranchId: 2,
+        destinationBranchId: 3,
         busId: 5,
         departureAt: schedule.scheduledDepartureAt,
         price: 50,
@@ -356,6 +358,35 @@ describe("Journey: alcance, operación y contratos de la etapa 3", () => {
     expect((await result.json())[0]).not.toHaveProperty("customerName");
     expect(mocks.fetch.mock.calls[0]?.[1].headers).not.toHaveProperty("Authorization");
     expect(mocks.session).not.toHaveBeenCalled();
+  });
+  it("acepta disponibilidad no verificada sin exponer datos privados", async () => {
+    responses([
+      {
+        tripId: 3,
+        routeId: 1,
+        originBranchId: 1,
+        destinationBranchId: 2,
+        busId: 1,
+        departureAt: "2026-11-14T14:00:00Z",
+        price: 75,
+        seatsAvailable: null,
+        customerName: "Privado",
+      },
+    ]);
+    const result = await searchTrips(request(undefined, "date=2026-11-14"));
+    expect(result.status).toBe(200);
+    expect(await result.json()).toEqual([
+      {
+        tripId: 3,
+        routeId: 1,
+        originBranchId: 1,
+        destinationBranchId: 2,
+        busId: 1,
+        departureAt: "2026-11-14T14:00:00Z",
+        price: 75,
+        seatsAvailable: null,
+      },
+    ]);
   });
   it("reduce catálogo público de sucursales a ID y nombre", async () => {
     responses([{ branchId: branch.id, name: branch.name, phone: "55555555" }]);
@@ -440,9 +471,9 @@ describe("Confirmación de respuestas abreviadas del SSOT", () => {
   });
   it("no presupone habilitación de sucursales si falta su estado", async () => {
     const { routeId: _, ...input } = route;
-    responses([branch, { ...branch, id: 3, active: undefined }]);
+    responses([{ branchId: 2, name: "Central" }, { branchId: 3, name: "Otra" }], branch, { ...branch, id: 3, active: undefined });
     expect((await createRoute(request(input))).status).toBe(422);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(3);
   });
   it("admite metadatos del proveedor sin reenviarlos al navegador", async () => {
     responses(trip, {

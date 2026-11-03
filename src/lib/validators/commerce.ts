@@ -11,10 +11,9 @@ export const SeatPositionSchema = z.object({ row: id.max(30), column: id.max(6) 
 export const SeatMapSchema = z
   .object({
     tripId: id,
-    busId: id,
     seatRows: id.max(30),
     seatColumns: id.max(6),
-    capacity: id.max(180),
+    seatLayoutRevision: z.number().int().nonnegative().safe(),
     seats: z
       .array(
         SeatPositionSchema.extend({
@@ -26,18 +25,31 @@ export const SeatMapSchema = z
   })
   .superRefine((map, ctx) => {
     if (
-      map.seats.length !== map.capacity ||
-      map.capacity > map.seatRows * map.seatColumns ||
       new Set(map.seats.map((s) => `${s.row}:${s.column}`)).size !== map.seats.length ||
-      map.seats.some(
-        (s) =>
-          s.row > map.seatRows ||
-          s.column > map.seatColumns ||
-          (s.state === "BLOCKED" && !s.reason?.trim()),
-      )
+      map.seats.some((s) => s.row > map.seatRows || s.column > map.seatColumns)
     )
       ctx.addIssue({ code: "custom", message: "Distribución de asientos incompatible" });
   }) satisfies z.ZodType<C.TripSeatMap, z.ZodTypeDef, unknown>;
+export const SeatMapResponseSchema = z
+  .object({
+    tripId: id,
+    seatRows: id.max(30),
+    seatColumns: id.max(6),
+    seatLayoutRevision: z.number().int().nonnegative().safe(),
+    seats: z
+      .array(
+        SeatPositionSchema.extend({
+          status: z.enum(["AVAILABLE", "HELD", "SOLD", "BLOCKED"]),
+          reason: z.string().nullish(),
+        }).strip(),
+      )
+      .max(180),
+  })
+  .transform(({ seats, ...map }) => ({
+    ...map,
+    seats: seats.map(({ status, ...seat }) => ({ ...seat, state: status })),
+  }))
+  .pipe(SeatMapSchema);
 export const HoldInputSchema = z
   .object({
     seats: z
@@ -99,9 +111,9 @@ export const CommerceInvoiceSchema = z
     sourceBranchId: id.nullable(),
     revenueBranchId: id,
     sellerUserId: id.nullable(),
-    state: z.enum(["PAID", "CANCELLED"]),
-    typeInvoice: z.enum(["TICKET_PAYMENT", "RENTAL_PAYMENT"]),
-    contactEmailStatus: z.string(),
+    state: z.enum(["PAID", "CANCELLED"]).optional(),
+    typeInvoice: z.enum(["TICKET_PAYMENT", "RENTAL_PAYMENT"]).optional(),
+    contactEmailStatus: z.string().optional(),
     refundedAmount: money.nullish(),
     rentalId: id.nullish(),
     quoteId: id.nullish(),
@@ -113,12 +125,15 @@ export const CommerceInvoiceSchema = z
     )
       c.addIssue({ code: "custom", message: "Canal y sucursal de compra incompatibles" });
   }) satisfies z.ZodType<C.CommerceInvoice, z.ZodTypeDef, unknown>;
-export const CancellationPreviewSchema = z.object({
-  eligible: z.boolean(),
-  amount: money,
-  appliedPercent: z.number().positive().max(100),
-  reason: z.string().nullish(),
-});
+export const CancellationPreviewSchema = z.discriminatedUnion("eligible", [
+  z.object({
+    eligible: z.literal(true),
+    amount: money,
+    appliedPercent: z.number().positive().max(100),
+    reason: z.string().nullish(),
+  }),
+  z.object({ eligible: z.literal(false), reason: z.string().min(1) }).strict(),
+]);
 export const InvoiceTicketSchema = PaymentTicketSchema.extend({
   invoiceId: id,
   amount: money,
@@ -131,6 +146,40 @@ export const ReceiptSchema = z
     (r) => r.tickets.every((t) => t.invoiceId === r.invoice.invoiceId),
     "Los boletos no corresponden a la factura",
   ) satisfies z.ZodType<C.CommerceReceipt, z.ZodTypeDef, unknown>;
+// Commerce entrega la factura y sus boletos en un único PurchaseResponse.
+export const PurchaseResponseSchema = z
+  .object({
+    invoiceId: id,
+    customerId: id,
+    customerNit: z.string().min(1),
+    customerName: z.string().min(1),
+    totalAmount: money,
+    paymentDate: date,
+    channel: z.enum(["WEB", "IN_PERSON"]),
+    sourceBranchId: id.nullable(),
+    revenueBranchId: id,
+    sellerUserId: id.nullish(),
+    contactEmailStatus: z.string().optional(),
+    state: z.enum(["PAID", "CANCELLED"]).optional(),
+    typeInvoice: z.enum(["TICKET_PAYMENT", "RENTAL_PAYMENT"]).optional(),
+    refundedAmount: money.nullish(),
+    tickets: z.array(
+      PaymentTicketSchema.extend({
+        amount: money,
+        state: z.enum(["PAID", "CANCELLED"]),
+        cancellationPreview: CancellationPreviewSchema.optional(),
+      }),
+    ),
+  })
+  .transform(({ tickets, sellerUserId, ...invoice }) => ({
+    invoice: { ...invoice, sellerUserId: sellerUserId ?? null },
+    tickets: tickets.map(({ state, ...ticket }) => ({
+      ...ticket,
+      invoiceId: invoice.invoiceId,
+      cancelled: state === "CANCELLED",
+    })),
+  }))
+  .pipe(ReceiptSchema);
 export const CustomerSuggestionSchema = z.object({
   customerId: id,
   nit: z.string().min(1),
@@ -207,12 +256,18 @@ export const WalletTransactionSchema = z.object({
   balanceAfter: money.optional(),
   description: z.string().nullish(),
 }) satisfies z.ZodType<C.WalletTransaction, z.ZodTypeDef, unknown>;
+export const WalletTransactionResponseSchema = WalletTransactionSchema.omit({ id: true })
+  .extend({ transactionId: id })
+  .transform(({ transactionId, ...transaction }) => ({ id: transactionId, ...transaction }));
 export const WalletOverviewSchema = z.object({
   wallet: CommerceWalletSchema,
   transactions: WalletTransactionSchema.array(),
 }) satisfies z.ZodType<C.WalletOverview, z.ZodTypeDef, unknown>;
 export const RechargeInputSchema = z
-  .object({ amount: money.refine((n) => n > 0, "El monto debe ser positivo") })
+  .object({
+    amount: money.refine((n) => n > 0, "El monto debe ser positivo"),
+    paymentDate: date,
+  })
   .strict();
 export const WalletRechargeSchema = z.object({
   transactionId: id,
@@ -221,16 +276,19 @@ export const WalletRechargeSchema = z.object({
 export const RefundSchema = z
   .object({
     refundId: id,
-    invoiceId: id,
-    ticketId: id.nullable(),
-    rentalId: id.nullable(),
+    invoiceId: id.optional(),
+    ticketId: id.nullish().transform((v) => v ?? null),
+    rentalId: id.nullish().transform((v) => v ?? null),
     refundCode: z.string().min(1).max(48),
     cause: z.enum(["VOLUNTARY", "BUSINESS_INCIDENT", "TRIP_CANCELLED", "RENTAL_CANCELLED"]),
     appliedPercent: z.number().positive().max(100),
     amount: money.refine((n) => n > 0),
     status: z.enum(["PENDING", "COMPLETED"]),
-    method: z.enum(["CASH", "WALLET"]).nullable(),
-    settledAt: instant.nullable(),
+    method: z
+      .enum(["CASH", "WALLET"])
+      .nullish()
+      .transform((v) => v ?? null),
+    settledAt: instant.nullish().transform((v) => v ?? null),
     paidBranchId: id.nullish(),
     processedByUserId: id.nullish(),
     reason: z.string().nullish(),
@@ -240,12 +298,24 @@ export const RefundSchema = z
       (r.ticketId === null) === (r.rentalId === null) ||
       (r.status === "PENDING" && (r.method !== null || r.settledAt !== null)) ||
       (r.status === "COMPLETED" &&
-        (!r.method ||
-          !r.settledAt ||
-          (r.method === "CASH" && (!r.paidBranchId || !r.processedByUserId))))
+        (!r.method || !r.settledAt || (r.method === "CASH" && !r.paidBranchId)))
     )
       c.addIssue({ code: "custom", message: "Estado de reembolso incompatible" });
   }) satisfies z.ZodType<C.RefundRecord, z.ZodTypeDef, unknown>;
+export const RefundClaimSchema = RefundSchema.and(
+  z.object({
+    tripId: id.nullish(),
+    seatRow: id.nullish(),
+    seatColumn: id.nullish(),
+    holderName: z.string().min(1),
+    operationBranchId: id,
+    cashSettleable: z.boolean(),
+    requiredChecks: z.array(z.string().min(1)).max(20),
+  }),
+).superRefine((claim, ctx) => {
+  if (claim.cashSettleable && claim.status !== "PENDING")
+    ctx.addIssue({ code: "custom", message: "El reembolso liquidado no admite otro pago" });
+}) satisfies z.ZodType<C.RefundClaim, z.ZodTypeDef, unknown>;
 export const CancellationPolicySchema = z
   .object({
     cutoffMinutes: z.number().int().nonnegative().max(2147483647),
@@ -275,6 +345,10 @@ export const RestrictionResultSchema = z.object({
   restrictionId: id,
   isActive: z.boolean(),
 }) satisfies z.ZodType<C.SeatRestriction, z.ZodTypeDef, unknown>;
+export const RestrictionTripSchema = z.object({
+  tripId: id,
+  departureAt: instant,
+}) satisfies z.ZodType<C.RestrictionTrip, z.ZodTypeDef, unknown>;
 export const ReassignInputSchema = z
   .object({ seatRow: id.max(30), seatColumn: id.max(6) })
   .strict();

@@ -14,6 +14,7 @@ import {
 import { OperationForm } from "./OperationForm";
 import { CustomerDataState } from "./CustomerDataState";
 import { Button } from "@/components/ui/button";
+import { cancellationReasonMessage } from "@/lib/commerce-ui";
 export function CommerceReceipt({
   invoiceId,
   userId,
@@ -64,9 +65,13 @@ export function CommerceReceipt({
                 ],
                 ["Sucursal comercial", `#${invoice.revenueBranchId}`],
                 ["Vendedor", invoice.sellerUserId ? `#${invoice.sellerUserId}` : "En línea"],
-                ["Estado", invoice.state === "PAID" ? "Pagada" : "Cancelada"],
+                ...(invoice.state
+                  ? [["Estado", invoice.state === "PAID" ? "Pagada" : "Cancelada"]]
+                  : []),
                 ["Total original", `Q${invoice.totalAmount.toFixed(2)}`],
-                ["Correo del comprobante", invoice.contactEmailStatus],
+                ...(invoice.contactEmailStatus
+                  ? [["Correo del comprobante", invoice.contactEmailStatus]]
+                  : []),
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-[var(--tg-muted)]">{label}</dt>
@@ -108,8 +113,7 @@ export function CommerceReceipt({
                           <p className="tg-notice">
                             {ticket.cancellationPreview.eligible
                               ? `Importe exacto informado para cancelar: Q${ticket.cancellationPreview.amount.toFixed(2)} (${ticket.cancellationPreview.appliedPercent}%). Se reconocerá como pendiente de cobro.`
-                              : (ticket.cancellationPreview.reason ??
-                                "El boleto no admite cancelación en su estado actual.")}
+                              : cancellationReasonMessage(ticket.cancellationPreview.reason)}
                           </p>
                         ) : (
                           <p role="status">

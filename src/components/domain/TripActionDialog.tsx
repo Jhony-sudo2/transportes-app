@@ -42,7 +42,10 @@ export function TripActionDialog({
   onSaved,
   pathBase,
 }: {
-  trip: TripRecord;
+  trip: Pick<TripRecord, "tripId" | "driverId"> & {
+    departure?: TripRecord["departure"] | undefined;
+    driverBaseSalarySnapshot?: TripRecord["driverBaseSalarySnapshot"] | undefined;
+  };
   action: Action;
   actor: "branch" | "driver";
   branchId?: number | undefined;

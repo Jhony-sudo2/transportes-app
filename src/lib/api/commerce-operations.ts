@@ -4,7 +4,7 @@ import { z } from "zod";
 import * as V from "@/lib/validators/commerce";
 import { ManagedBranchIdSchema as id } from "@/lib/validators/branch-context";
 import { BranchSchema } from "@/lib/validators/branch";
-import { TripRecordSchema, TripListSchema } from "@/lib/validators/journey";
+import { TripOffersSchema } from "@/lib/validators/journey";
 import { BusListSchema } from "@/lib/validators/fleet-resources";
 import { operationsAccess } from "./operations-access";
 import {
@@ -16,6 +16,7 @@ import {
 import { adminErrorResponse } from "./admin";
 import { ApplicationError } from "@/types/error";
 import type { TransportRoleName } from "@/types/auth";
+import type { CommerceReceipt, SeatCell } from "@/types/commerce";
 type Access = Awaited<ReturnType<typeof operationsAccess>>;
 const POS: TransportRoleName[] = ["CAJERO", "SUCURSAL_ADMIN"],
   CUSTOMER: TransportRoleName[] = ["CUSTOMER"],
@@ -43,9 +44,9 @@ async function command(
 }
 export async function ownInvoices(access: Access) {
   const invoices = serviceResult(
-    V.CommerceInvoiceSchema.array(),
+    V.PurchaseResponseSchema.array(),
     await transportService("payments/me", access),
-  );
+  ).map((purchase) => purchase.invoice);
   if (
     invoices.some(
       (i) =>
@@ -57,14 +58,17 @@ export async function ownInvoices(access: Access) {
     fail("Las facturas no corresponden al Customer personal de tu cuenta.");
   return invoices;
 }
-export async function authorizedReceipt(invoiceId: number, access: Access) {
+export async function authorizedReceipt(
+  invoiceId: number,
+  access: Access,
+): Promise<CommerceReceipt> {
   if (
     access.user.role.name === "CUSTOMER" &&
     !(await ownInvoices(access)).some((i) => i.invoiceId === invoiceId)
   )
     fail("La factura no corresponde a tu cuenta.");
   const result = serviceResult(
-    V.ReceiptSchema,
+    V.PurchaseResponseSchema,
     await transportService(`payments/${invoiceId}/tickets`, access),
   );
   if (result.invoice.invoiceId !== invoiceId)
@@ -95,15 +99,25 @@ async function ownedRefund(refundId: number, access: Access, code?: string) {
   } else {
     if (!code) fail("Presenta el código exacto del comprobante.", 400);
     const claim = serviceResult(
-      V.RefundSchema,
+      V.RefundClaimSchema,
       await transportService(`refunds/claim?${new URLSearchParams({ code })}`, access),
     );
-    if (claim.refundId !== refundId || claim.refundCode !== code)
+    if (
+      claim.refundId !== refundId ||
+      claim.refundCode !== code ||
+      claim.operationBranchId !== access.branchId
+    )
       fail("El código no corresponde al reembolso.");
   }
+  // El staff presenta el mismo código: Commerce lo admite desde su sede operativa aunque la venta sea de otra sede.
   const refund = serviceResult(
     V.RefundSchema,
-    await transportService(`refunds/${refundId}`, access),
+    await transportService(
+      access.user.role.name === "CUSTOMER" || !code
+        ? `refunds/${refundId}`
+        : `refunds/${refundId}?${new URLSearchParams({ code })}`,
+      access,
+    ),
   );
   if (refund.refundId !== refundId) fail("La respuesta no corresponde al reembolso.", 502);
   return refund;
@@ -118,11 +132,11 @@ async function restrictionScope(scopeType: "BUS" | "TRIP", scopeId: number, acce
     );
     if (!buses.some((b) => b.id === scopeId)) fail("El bus no pertenece a la sucursal.");
   } else {
-    const trip = serviceResult(
-      TripRecordSchema,
-      await transportService(`trips/${scopeId}`, access),
+    const trips = serviceResult(
+      TripOffersSchema,
+      await transportService(`trips?originBranchId=${access.branchId}`),
     );
-    if (trip.tripId !== scopeId || trip.operatingBranchId !== access.branchId)
+    if (!trips.some((trip) => trip.tripId === scopeId && trip.originBranchId === access.branchId))
       fail("El viaje no pertenece a la sucursal.");
   }
 }
@@ -133,14 +147,13 @@ export async function commerceOperation(request: NextRequest, segments: string[]
     if (method !== "GET") requireSameOrigin(request);
     if (path === "context" && method === "GET") {
       const a = await operationsAccess(request, POS, true);
-      const branch = serviceResult(
-        BranchSchema,
-        await transportService(`branches/${a.branchId}`, a),
-      );
+      const branchName =
+        a.branchName ??
+        serviceResult(BranchSchema, await transportService(`branches/${a.branchId}`, a)).name;
       return NextResponse.json({
         userId: a.user.id,
         branchId: a.branchId,
-        branchName: branch.name,
+        branchName,
         canManageCapital: a.user.role.name === "SUCURSAL_ADMIN",
       });
     }
@@ -152,7 +165,7 @@ export async function commerceOperation(request: NextRequest, segments: string[]
       ]);
       return NextResponse.json({
         wallet: serviceResult(V.CommerceWalletSchema, wallet),
-        transactions: serviceResult(V.WalletTransactionSchema.array(), transactions),
+        transactions: serviceResult(V.WalletTransactionResponseSchema.array(), transactions),
       });
     }
     if (path === "wallet/recharges" && method === "POST") {
@@ -178,22 +191,25 @@ export async function commerceOperation(request: NextRequest, segments: string[]
     if (path === "restrictions/context" && method === "GET") {
       const a = await operationsAccess(request, POS, true),
         trips = serviceResult(
-          TripListSchema,
-          await transportService(`trips?operatingBranchId=${a.branchId}&tripType=REGULAR`, a),
+          TripOffersSchema,
+          await transportService(`trips?originBranchId=${a.branchId}`),
         );
-      if (trips.some((t) => t.tripType !== "REGULAR" || t.operatingBranchId !== a.branchId))
+      if (trips.some((t) => t.originBranchId !== a.branchId))
         fail("Los viajes no corresponden a la sucursal.");
       const buses =
         a.user.role.name === "SUCURSAL_ADMIN"
           ? serviceResult(BusListSchema, await transportService(`branches/${a.branchId}/buses`, a))
           : [];
-      return NextResponse.json({ trips, buses });
+      return NextResponse.json({
+        trips: trips.map(({ tripId, departureAt }) => ({ tripId, departureAt })),
+        buses,
+      });
     }
     if (segments[0] === "seats" && segments.length === 2 && method === "GET") {
       const a = await operationsAccess(request, BUYERS, true),
         tripId = parseId(segments[1]);
       const map = serviceResult(
-        V.SeatMapSchema,
+        V.SeatMapResponseSchema,
         await transportService(`seats/trips/${tripId}`, a),
       );
       if (map.tripId !== tripId) fail("No se pudo confirmar el mapa del viaje.", 502);
@@ -209,7 +225,7 @@ export async function commerceOperation(request: NextRequest, segments: string[]
         tripId = parseId(segments[1]),
         body = await input(request, V.HoldInputSchema);
       const map = serviceResult(
-        V.SeatMapSchema,
+        V.SeatMapResponseSchema,
         await transportService(`seats/trips/${tripId}`, a),
       );
       if (
@@ -217,7 +233,7 @@ export async function commerceOperation(request: NextRequest, segments: string[]
         body.seats.some(
           (s) =>
             !map.seats.some(
-              (c) => c.row === s.row && c.column === s.column && c.state === "AVAILABLE",
+              (c: SeatCell) => c.row === s.row && c.column === s.column && c.state === "AVAILABLE",
             ),
         )
       )
@@ -387,10 +403,11 @@ export async function commerceOperation(request: NextRequest, segments: string[]
           request.nextUrl.searchParams.get("code"),
         );
       const refund = serviceResult(
-        V.RefundSchema,
+        V.RefundClaimSchema,
         await transportService(`refunds/claim?${new URLSearchParams({ code })}`, a),
       );
-      if (refund.refundCode !== code) fail("El comprobante no coincide.", 502);
+      if (refund.refundCode !== code || refund.operationBranchId !== a.branchId)
+        fail("El comprobante no coincide con la sucursal operativa.", 502);
       return NextResponse.json(refund);
     }
     if (segments[0] === "refunds" && segments.length === 2 && method === "GET") {
@@ -430,7 +447,8 @@ export async function commerceOperation(request: NextRequest, segments: string[]
           request,
           `refunds/${refundId}/${segments[2]}`,
           a,
-          cash ? { delivered: true } : {},
+          // branchId sale del contexto verificado de sesión, nunca de un campo libre del cliente.
+          cash ? { branchId: a.branchId, delivered: true } : {},
         ),
       );
       if (
@@ -438,7 +456,9 @@ export async function commerceOperation(request: NextRequest, segments: string[]
         result.amount !== refund.amount ||
         result.status !== "COMPLETED" ||
         result.method !== (cash ? "CASH" : "WALLET") ||
-        (cash && (result.paidBranchId !== a.branchId || result.processedByUserId !== a.user.id))
+        (cash &&
+          (result.paidBranchId !== a.branchId ||
+            (result.processedByUserId != null && result.processedByUserId !== a.user.id)))
       )
         fail("No se pudo confirmar la liquidación. Consulta el reembolso antes de repetirla.", 502);
       return NextResponse.json(result);

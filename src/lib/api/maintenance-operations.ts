@@ -29,9 +29,13 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
         ? undefined
         : checkedBody(OperationKeySchema, request.headers.get("Idempotency-Key"));
     const input = method === "GET" ? undefined : await request.json().catch(() => null);
+    const categoryQuery = a.branchId ? `?branchId=${a.branchId}` : "";
     if (path === "categories" && method === "GET")
       return NextResponse.json(
-        serviceResult(V.CategorySchema.array(), await transportService("expense-categories", a)),
+        serviceResult(
+          V.CategorySchema.array(),
+          await transportService(`expense-categories${categoryQuery}`, a),
+        ),
       );
     if (
       category &&
@@ -42,12 +46,15 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
         categoryId = segments.length === 2 ? checkedBody(id, Number(segments[1])) : null;
       const result = serviceResult(
         V.CategorySchema,
-        await transportService(`expense-categories${categoryId ? `/${categoryId}` : ""}`, {
-          ...a,
-          body,
-          method: method === "PATCH" ? "PATCH" : "POST",
-          idempotencyKey: key,
-        }),
+        await transportService(
+          `expense-categories${categoryId ? `/${categoryId}` : ""}${categoryQuery}`,
+          {
+            ...a,
+            body,
+            method: method === "PATCH" ? "PATCH" : "POST",
+            idempotencyKey: key,
+          },
+        ),
       );
       if (
         result.name !== body.name ||
@@ -76,6 +83,14 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
           Object.entries(range).filter((e): e is [string, string] => e[1] !== undefined),
         );
       params.set("branchId", String(a.branchId));
+      if (range.dateFrom) {
+        params.delete("dateFrom");
+        params.set("from", range.dateFrom);
+      }
+      if (range.dateTo) {
+        params.delete("dateTo");
+        params.set("to", range.dateTo);
+      }
       if (query.has("busId")) {
         const busId = checkedBody(id, Number(query.get("busId")));
         if (!buses.some((b) => b.id === busId))
@@ -83,7 +98,7 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
         params.set("busId", String(busId));
       }
       const services = serviceResult(
-        V.WorkshopServiceSchema.array(),
+        V.WorkshopServiceResponseSchema.array(),
         await transportService(`workshop-services?${params}`, a),
       );
       if (services.some((s) => !buses.some((b) => b.id === s.busId)))
@@ -104,7 +119,7 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
         );
       const categories = serviceResult(
         V.CategorySchema.array(),
-        await transportService("expense-categories", a),
+        await transportService(`expense-categories${categoryQuery}`, a),
       );
       if (
         body.lines.some((l) => !categories.some((c) => c.categoryId === l.categoryId && c.active))
@@ -115,7 +130,7 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
           "Selecciona categorías activas para todos los detalles.",
         );
       const result = serviceResult(
-        V.WorkshopServiceSchema,
+        V.WorkshopServiceResponseSchema,
         await transportService("workshop-services", { ...a, body, idempotencyKey: key }),
       );
       if (
@@ -133,7 +148,7 @@ export async function maintenanceOperation(request: NextRequest, segments: strin
     if (segments[0] === "services" && segments.length === 2 && method === "GET") {
       const serviceId = checkedBody(id, Number(segments[1])),
         service = serviceResult(
-          V.WorkshopServiceSchema,
+          V.WorkshopServiceResponseSchema,
           await transportService(`workshop-services/${serviceId}`, a),
         );
       if (service.workshopServiceId !== serviceId || !buses.some((b) => b.id === service.busId))

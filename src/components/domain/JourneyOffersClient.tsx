@@ -6,21 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCustomerData } from "@/hooks/useCustomerData";
 import { ManagedBranchChoiceSchema } from "@/lib/validators/branch-context";
-import { TripOffersSchema, RouteListSchema } from "@/lib/validators/journey";
+import { TripOffersSchema } from "@/lib/validators/journey";
 import { guatemalaDate, displayInstant } from "@/lib/transport-time";
 import { CustomerDataState } from "./CustomerDataState";
 const branchesSchema = ManagedBranchChoiceSchema.array();
-export function JourneyOffersClient({checkoutBase="/customer/trips"}:{checkoutBase?:string}) {
+export function JourneyOffersClient({
+  checkoutBase = "/customer/trips",
+}: {
+  checkoutBase?: string;
+}) {
   const branches = useCustomerData("/api/journey/branches", branchesSchema);
-  const routes = useCustomerData("/api/journey/routes", RouteListSchema);
-  const routeName = (routeId: number) => {
-    const route = routes.data?.find((item) => item.routeId === routeId);
-    const name = (id: number) =>
-      branches.data?.find((item) => item.id === id)?.name ?? `Sucursal #${id}`;
-    return route
-      ? `${name(route.originBranchId)} → ${name(route.destinationBranchId)}`
-      : `Ruta #${routeId}`;
-  };
+  const branchName = (id: number) =>
+    branches.data?.find((item) => item.id === id)?.name ?? `Sucursal #${id}`;
   const [query, setQuery] = useState(() => `date=${guatemalaDate()}`);
   const offers = useCustomerData(`/api/journey/trips?${query}`, TripOffersSchema);
   return (
@@ -69,7 +66,6 @@ export function JourneyOffersClient({checkoutBase="/customer/trips"}:{checkoutBa
         error={branches.error}
         retry={branches.refresh}
       />
-      <CustomerDataState loading={routes.loading} error={routes.error} retry={routes.refresh} />
       <CustomerDataState loading={offers.loading} error={offers.error} retry={offers.refresh} />
       {offers.data?.length === 0 && <p>No hay viajes disponibles para esta búsqueda.</p>}
       <div className="grid gap-5 md:grid-cols-2">
@@ -78,15 +74,26 @@ export function JourneyOffersClient({checkoutBase="/customer/trips"}:{checkoutBa
             key={trip.tripId}
             className="space-y-3 rounded-2xl border border-[var(--tg-line)] bg-[var(--tg-paper)] p-5"
           >
-            <h2 className="text-lg font-semibold">{routeName(trip.routeId)}</h2>
+            <h2 className="text-lg font-semibold">
+              {branchName(trip.originBranchId)} → {branchName(trip.destinationBranchId)}
+            </h2>
             <p>{displayInstant(trip.departureAt)}</p>
             <p>
-              Q{trip.price.toFixed(2)} por boleto · {trip.seatsAvailable} asientos disponibles
+              Q{trip.price.toFixed(2)} por boleto ·{" "}
+              {trip.seatsAvailable === null
+                ? "Disponibilidad por confirmar"
+                : `${trip.seatsAvailable} asientos disponibles`}
             </p>
             <p className="text-sm text-[var(--tg-muted)]">
               Viaje #{trip.tripId} · Bus #{trip.busId}
             </p>
-            {trip.seatsAvailable>0&&<Button asChild><Link href={`${checkoutBase}/${trip.tripId}`}>Elegir asientos</Link></Button>}
+            {trip.seatsAvailable !== 0 && (
+              <Button asChild>
+                <Link href={`${checkoutBase}/${trip.tripId}`}>
+                  {trip.seatsAvailable === null ? "Consultar asientos" : "Elegir asientos"}
+                </Link>
+              </Button>
+            )}
           </article>
         ))}
       </div>

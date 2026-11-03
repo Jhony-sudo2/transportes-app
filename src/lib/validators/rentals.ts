@@ -4,15 +4,30 @@ import { ManagedBranchIdSchema as id } from "./branch-context";
 import {
   MoneyInputSchema as money,
   BusinessInstantSchema as instant,
-  TripRecordSchema,
+  TripStatusSchema,
+  TripDepartureSchema,
+  TripArrivalSchema,
 } from "./journey";
 import { CivilDateSchema } from "./journey";
 import { CancellationPreviewSchema } from "./commerce";
-import { BusTypeListSchema } from "./bus-type";
 import { BranchListSchema } from "./branch";
 import { BusListSchema, DriverListSchema } from "./fleet-resources";
+export const RentalBusTypeSchema = z.object({
+  id,
+  name: z.string().min(1),
+  capacity: id,
+  description: z.string().nullish(),
+  active: z.boolean().optional(),
+  suggestedDriverSalaryPerTrip: money.optional(),
+  availabilityHint: z.enum(["POSSIBLE", "NONE", "UNKNOWN"]).optional(),
+}) satisfies z.ZodType<R.RentalBusType, z.ZodTypeDef, unknown>;
+export const RentalCatalogResponseSchema = z.array(
+  RentalBusTypeSchema.omit({ id: true })
+    .extend({ busTypeId: id })
+    .transform(({ busTypeId, ...type }) => ({ ...type, id: busTypeId })),
+);
 export const RentalContextSchema = z.object({
-  busTypes: BusTypeListSchema,
+  busTypes: RentalBusTypeSchema.array(),
   branches: BranchListSchema,
   branchId: id.nullable(),
 }) satisfies z.ZodType<R.RentalContext, z.ZodTypeDef, unknown>;
@@ -48,9 +63,11 @@ export const QuoteApprovalSchema = z
     estimatedReturnKm: money.refine((n) => n > 0).optional(),
     outboundArrivalEstimateAt: instant,
     returnArrivalEstimateAt: instant.optional(),
-    driverBaseSalary: money.optional(),
+    outboundDriverBaseSalary: money.optional(),
+    returnDriverBaseSalary: money.optional(),
     priceComponents: z.array(PriceComponentSchema).max(100),
     finalPrice: money.refine((n) => n > 0),
+    priceJustification: z.string().trim().max(1000).optional(),
   })
   .strict();
 export const AdminQuoteInputSchema = RentalQuoteInputSchema.merge(QuoteApprovalSchema)
@@ -72,30 +89,80 @@ export const AdminQuoteInputSchema = RentalQuoteInputSchema.merge(QuoteApprovalS
   );
 export const RentalQuoteSchema = RentalQuoteInputSchema.extend({
   quoteId: id,
-  customerId: id,
+  quoteReference: z.string().min(1).optional(),
+  customerId: id.optional(),
   status: z.enum(["PENDING_APPROVAL", "APPROVED", "PAID"]),
   expiresAt: instant,
   finalPrice: money.nullable(),
-  managingBranchId: id.nullable(),
+  managingBranchId: id.nullish(),
   rentalId: id.nullable(),
-  invoiceId: id.nullable(),
+  invoiceId: id.nullish(),
   estimatedCost: money.nullish(),
   priceComponents: z.array(PriceComponentSchema).optional(),
   customerNit: z.string().optional(),
 })
   .strip()
   .superRefine((q, c) => {
-    if (
-      q.status !== "PENDING_APPROVAL" &&
-      (!q.managingBranchId || q.finalPrice === null || q.finalPrice <= 0)
-    )
+    if (q.status !== "PENDING_APPROVAL" && (q.finalPrice === null || q.finalPrice <= 0))
       c.addIssue({ code: "custom", message: "Cotización aprobada incompleta" });
-    if (q.status === "PAID" && !q.invoiceId)
-      c.addIssue({ code: "custom", message: "Falta la referencia del pago" });
   }) satisfies z.ZodType<R.RentalQuote, z.ZodTypeDef, unknown>;
-export const RentalLegSchema = TripRecordSchema.and(
-  z.object({ legType: z.enum(["OUTBOUND", "RETURN"]) }),
-);
+const QuoteRouteResponseSchema = z.object({
+  origin: z.string().min(1),
+  destination: z.string().min(1),
+  departureAt: instant,
+  returnDepartureAt: instant.nullish(),
+  passengerCount: id,
+  busTypeId: id,
+  waitHours: money,
+});
+export const RentalQuoteResponseSchema = z
+  .object({
+    quoteId: id,
+    quoteReference: z.string().min(1),
+    customerId: id.optional(),
+    status: z.enum(["PENDING_APPROVAL", "APPROVED", "PAID"]),
+    expiresAt: instant,
+    finalPrice: money.nullable(),
+    managingBranchId: id.nullish(),
+    rentalId: id.nullish(),
+    estimatedCost: money.nullish(),
+    priceComponents: z
+      .object({ additionalCosts: z.array(PriceComponentSchema).nullish() })
+      .nullish(),
+    routeSummary: QuoteRouteResponseSchema,
+  })
+  .transform(({ routeSummary, priceComponents, rentalId, ...quote }) => {
+    const { returnDepartureAt, ...route } = routeSummary;
+    return {
+      ...quote,
+      ...route,
+      rentalId: rentalId ?? null,
+      ...(returnDepartureAt == null ? {} : { returnDepartureAt }),
+      ...(priceComponents?.additionalCosts
+        ? { priceComponents: priceComponents.additionalCosts }
+        : {}),
+    };
+  })
+  .pipe(RentalQuoteSchema);
+export const PayableQuoteSchema = z.object({
+  quoteId: id,
+  customerNit: z.string().min(1),
+  finalPrice: money.refine((value) => value > 0),
+  expiresAt: instant,
+}) satisfies z.ZodType<R.PayableQuote, z.ZodTypeDef, unknown>;
+export const RentalLegSchema = z.object({
+  tripId: id,
+  legType: z.enum(["OUTBOUND", "RETURN"]),
+  status: TripStatusSchema,
+  operatingBranchId: id.nullable(),
+  busId: id.nullable(),
+  driverId: id.nullable(),
+  scheduledDepartureAt: instant,
+  scheduledArrivalAt: instant,
+  departure: TripDepartureSchema.strip().nullish(),
+  arrival: TripArrivalSchema.strip().nullish(),
+  driverBaseSalarySnapshot: money.nullish(),
+});
 export const RentalContractSchema = z
   .object({
     rentalId: id,
@@ -117,7 +184,6 @@ export const RentalContractSchema = z
     if (
       !r.legs.some((l) => l.legType === "OUTBOUND") ||
       new Set(r.legs.map((l) => l.legType)).size !== r.legs.length ||
-      r.legs.some((l) => l.rentalId !== r.rentalId || l.tripType !== "PRIVATE") ||
       (r.status === "COMPLETED" && r.legs.some((l) => l.status !== "COMPLETED"))
     )
       c.addIssue({ code: "custom", message: "Tramos incompatibles con el alquiler" });
@@ -141,6 +207,7 @@ export const RentalCancelResultSchema = z.object({
 export const RentalPolicySchema = z
   .object({ validityDays: id, waitCostPerHour: money })
   .strict() satisfies z.ZodType<R.RentalPolicy, z.ZodTypeDef, unknown>;
+export const RentalPolicyResponseSchema = RentalPolicySchema.strip();
 export const RentalPaymentInputSchema = z
   .object({
     quoteId: id,
