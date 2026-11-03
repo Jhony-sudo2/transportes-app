@@ -193,7 +193,7 @@ export function DeleteDriverRequestDialog({ driver, branchId, actions }: DriverD
         <DialogHeader>
           <DialogTitle>Eliminar solicitud rechazada</DialogTitle>
           <DialogDescription className="text-[var(--tg-muted)]">
-            Se eliminará el registro de {driver.name} {driver.lastName} en Fleet. Podrás registrarlo
+            Se eliminará el registro de {driver.name} {driver.lastName}. Podrás registrarlo
             nuevamente cuando corrijas los datos. El historial de la operación se conserva.
           </DialogDescription>
         </DialogHeader>

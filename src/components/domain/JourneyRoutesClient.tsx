@@ -167,8 +167,7 @@ export function JourneyRoutesClient({ branchId }: { branchId: number }) {
             {name(shown.originBranchId)} → {name(shown.destinationBranchId)}
           </h2>
           <p className="text-sm text-[var(--tg-muted)]">
-            Referencia entre las coordenadas de las sucursales. El trazo no representa una ruta vial
-            calculada.
+            Trazo de referencia entre las sucursales; no representa la ruta por carretera.
           </p>
           <BranchMap
             branches={selectedBranches}

@@ -81,8 +81,7 @@ export function BranchAvailabilityButton({
             {branch.active ? "Deshabilitar sucursal" : "Habilitar sucursal"}
           </DialogTitle>
           <DialogDescription>
-            {branch.name}. Para operar debe contar con un administrador activo. El servicio
-            verificará las condiciones al confirmar.
+            {branch.name}. Para operar debe contar con un administrador activo.
           </DialogDescription>
         </DialogHeader>
         {error && (

@@ -78,7 +78,7 @@ test("primer acceso usa el enlace de bienvenida, valida las claves y permite ini
   await expect(
     page.getByRole("heading", { name: "Crea tu contraseña", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("Token de recuperación")).toHaveCount(0);
+  await expect(page.getByLabel("Código de recuperación")).toHaveCount(0);
   await expect(page.getByLabel("Nueva contraseña", { exact: true })).toHaveAttribute(
     "maxlength",
     "20",

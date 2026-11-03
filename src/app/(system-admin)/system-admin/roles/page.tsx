@@ -35,7 +35,7 @@ const profiles = [
 ] satisfies { id: number; code: ApiRoleName; label: string; scope: string }[];
 export default function Page() {
   return (
-    <OperationsPage title="Perfiles del proyecto" roles={["ADMIN"]}>
+    <OperationsPage title="Perfiles de usuario" roles={["ADMIN"]}>
       {() => (
         <div className="space-y-5">
           <p>

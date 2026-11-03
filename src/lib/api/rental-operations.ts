@@ -540,7 +540,7 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
       if (!preview?.eligible)
         fail(
           preview?.reason ??
-            "El servicio debe informar el importe exacto antes de confirmar la cancelación.",
+            "El importe exacto aún no está disponible. Actualiza los datos antes de confirmar la cancelación.",
           422,
         );
       const result = serviceResult(

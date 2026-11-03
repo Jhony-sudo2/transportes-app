@@ -191,8 +191,7 @@ export function AnalyticsWorkspace({ branchId }: { branchId?: number }) {
         </Button>
       </form>
       <p className="text-sm">
-        Fechas vacías: todo el historial autorizado. Los totales y subtotales se muestran tal como
-        fueron confirmados por Analytics.
+        Si no seleccionas fechas, se muestra todo el historial disponible.
       </p>
       <CustomerDataState
         loading={resource.loading || context.loading}

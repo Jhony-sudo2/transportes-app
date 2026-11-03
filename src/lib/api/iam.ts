@@ -162,7 +162,7 @@ export async function transportRequest(
     throw new ApplicationError(
       "system.internal_error",
       502,
-      "No se pudo conectar al servidor. Verifica que el gateway y user-service estén disponibles.",
+      "No se pudo conectar al servidor. Inténtalo nuevamente.",
     );
   }
   if (!response.ok) {

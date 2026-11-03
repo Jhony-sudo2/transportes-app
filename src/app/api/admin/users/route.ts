@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       throw new ApplicationError(
         "validation.failed",
         422,
-        "El servicio de personal aún no informa correos para todas las cuentas. Consulta por rol, sucursal o estado.",
+        "La búsqueda por correo no está disponible por ahora. Consulta por rol, sucursal o estado.",
       );
     const email = parsed.data.email.toLowerCase();
     const users = result.data.filter((user) => !email || user.email.toLowerCase().includes(email));

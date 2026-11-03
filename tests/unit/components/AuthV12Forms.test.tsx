@@ -40,7 +40,7 @@ describe("SSOT v12 access forms", () => {
       fetchMock.mockResolvedValueOnce(Response.json({ status: "reset" }));
       render(<PasswordSetupForm mode={mode} />);
       expect(window.location.search).not.toContain("token");
-      expect(screen.queryByLabelText("Token de recuperación")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Código de recuperación")).not.toBeInTheDocument();
       const user = userEvent.setup();
       await user.type(screen.getByLabelText("Nueva contraseña"), "new-password-123");
       await user.type(screen.getByLabelText("Confirmar contraseña"), "new-password-123");

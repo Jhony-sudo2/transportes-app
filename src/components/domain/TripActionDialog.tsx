@@ -125,7 +125,7 @@ export function TripActionDialog({
         onSaved(
           result.status === "CANCELLING"
             ? "Cancelación en proceso. Consulta el estado hasta que se confirme."
-            : "El servicio confirmó la cancelación del viaje.",
+            : "Viaje cancelado.",
         );
       }
     } else {
@@ -161,9 +161,9 @@ export function TripActionDialog({
           </DialogTitle>
           <DialogDescription>
             {action === "cancel"
-              ? "La cancelación requiere motivo y se confirma después del cierre comercial. Las devoluciones se consultan por separado."
+              ? "La cancelación requiere un motivo. Las devoluciones se consultan por separado."
               : action === "driver"
-                ? "Selecciona un chofer habilitado de la misma sucursal. El servicio verifica licencia y horarios."
+                ? "Selecciona un chofer habilitado de la misma sucursal. Se verificarán su licencia y horarios."
                 : "Revisa y confirma los datos reales. La salida y llegada quedan registradas de forma permanente."}
           </DialogDescription>
         </DialogHeader>

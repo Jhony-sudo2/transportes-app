@@ -235,8 +235,7 @@ function RefundInvoiceContent({
                 className="rounded-xl bg-[var(--color-surface)] p-4 text-sm leading-6"
               >
                 Presenta la factura #{invoice.id} en {branchName} para cobrar{" "}
-                {formatCurrency(invoice.totalAmount)}. El cajero registrará la entrega. Consultar
-                estas instrucciones no registra el pago.
+                {formatCurrency(invoice.totalAmount)}. El cajero registrará la entrega.
               </p>
             )}
           </div>

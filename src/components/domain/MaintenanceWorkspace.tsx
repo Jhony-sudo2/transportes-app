@@ -80,8 +80,7 @@ export function ExpenseCategories({ userId, branchId }: { userId: number; branch
         </details>
       ))}
       <p className="text-sm text-[var(--tg-muted)]">
-        Deshabilitar impide nuevos registros y conserva los detalles anteriores. Las categorías
-        referenciadas no se borran físicamente.
+        Deshabilitar impide nuevos registros y conserva los detalles anteriores.
       </p>
     </section>
   );

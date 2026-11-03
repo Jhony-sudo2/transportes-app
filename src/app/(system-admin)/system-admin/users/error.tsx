@@ -4,7 +4,7 @@ export default function AdminUsersError({ reset }: { reset: () => void }) {
   return (
     <section className="mx-auto max-w-xl space-y-4 px-6 py-14">
       <h1 className="text-2xl font-semibold">No se pudo verificar tu sesión</h1>
-      <p>Comprueba que el gateway y el servicio de usuarios estén disponibles.</p>
+      <p>Inténtalo nuevamente en unos minutos.</p>
       <Button onClick={reset}>Reintentar</Button>
     </section>
   );

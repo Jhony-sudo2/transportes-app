@@ -70,7 +70,7 @@ export function CommerceReceipt({
                     ? "En línea"
                     : invoice.sellerUserId
                       ? `#${invoice.sellerUserId}`
-                      : "No informado por el servicio",
+                      : "No disponible",
                 ],
                 ...(invoice.state
                   ? [["Estado", invoice.state === "PAID" ? "Pagada" : "Cancelada"]]
@@ -88,7 +88,7 @@ export function CommerceReceipt({
             </dl>
             {invoice.refundedAmount != null && (
               <p className="mt-4 text-sm">
-                Importe de devoluciones reportado: Q{invoice.refundedAmount.toFixed(2)}. Consulta
+                Importe devuelto: Q{invoice.refundedAmount.toFixed(2)}. Consulta
                 cada reembolso para conocer su liquidación.
               </p>
             )}
@@ -124,7 +124,7 @@ export function CommerceReceipt({
                           </p>
                         ) : (
                           <p role="status">
-                            El servicio aún no informó el importe exacto de cancelación. Actualiza
+                            El importe exacto de cancelación aún no está disponible. Actualiza
                             el comprobante antes de confirmar.
                           </p>
                         )}
@@ -132,7 +132,7 @@ export function CommerceReceipt({
                           <p>
                             Cancelación voluntaria: porcentaje vigente{" "}
                             {policy.data.voluntaryRefundPercent}%, corte {policy.data.cutoffMinutes}{" "}
-                            minutos. El servicio confirma el derecho y monto exacto; el dinero se
+                            minutos. El monto exacto se confirma al cancelar y el dinero se
                             cobra después como reembolso.
                           </p>
                         ) : (

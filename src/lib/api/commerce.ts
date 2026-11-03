@@ -30,7 +30,7 @@ export function commerceResult<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, r
     throw new ApplicationError(
       "system.internal_error",
       502,
-      "Commerce devolvió una respuesta que no se pudo verificar. Actualiza los datos.",
+      "No se pudo verificar la información recibida. Actualiza los datos.",
     );
   return result.data;
 }
@@ -65,7 +65,7 @@ export async function commerceRequest(
       "system.internal_error",
       502,
       body === undefined
-        ? "No se pudo conectar con Commerce. Inténtalo nuevamente."
+        ? "No se pudo conectar con el servidor. Inténtalo nuevamente."
         : uncertainMessage,
     );
   }
@@ -78,9 +78,9 @@ export async function commerceRequest(
         : response.status === 403
           ? "No tienes acceso a esta información."
           : response.status === 401
-            ? "Commerce no pudo validar tu acceso. Inténtalo nuevamente."
+            ? "No se pudo validar tu acceso. Inténtalo nuevamente."
             : body === undefined
-              ? "No se pudieron consultar tus datos en Commerce."
+              ? "No se pudieron consultar tus datos."
               : response.status >= 500
                 ? uncertainMessage
                 : operation === "cancellation"
@@ -119,7 +119,7 @@ export async function commerceRequest(
     throw new ApplicationError(
       "system.internal_error",
       502,
-      body === undefined ? "No se pudo leer la respuesta de Commerce." : uncertainMessage,
+      body === undefined ? "No se pudo leer la respuesta del servidor." : uncertainMessage,
     );
   }
 }

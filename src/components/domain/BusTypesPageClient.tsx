@@ -180,8 +180,7 @@ export function BusTypesPageClient() {
               </label>
             </fieldset>
             <p className="text-sm text-[var(--tg-muted)]">
-              La capacidad de un tipo con buses asociados no puede cambiarse. El servicio verifica
-              esta condición al guardar.
+              La capacidad de un tipo con buses asociados no puede cambiarse.
             </p>
             {error && (
               <p role="alert" className="tg-notice">

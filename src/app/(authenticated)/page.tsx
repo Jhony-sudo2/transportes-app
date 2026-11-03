@@ -12,7 +12,7 @@ export default async function Home(): Promise<React.ReactElement> {
       <section className="mx-auto max-w-xl space-y-4 px-6 py-16">
         <h1 className="text-2xl font-semibold">Servicio temporalmente no disponible</h1>
         <p>
-          No se pudo verificar tu sesión. Comprueba que el gateway y user-service estén activos.
+          No se pudo verificar tu sesión. Inténtalo nuevamente en unos minutos.
         </p>
         <Link href="/" className="underline">
           Reintentar

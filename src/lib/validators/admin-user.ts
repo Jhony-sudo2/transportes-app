@@ -15,7 +15,7 @@ export const CreatableRoleSchema = z
   .int()
   .refine(
     (id) => [1, 3, 5].includes(id),
-    "Selecciona un rol válido; los choferes se registran desde Fleet",
+    "Selecciona un rol válido; los choferes se registran desde la flota",
   );
 export const AdminRoleSchema = z.object({
   id: z.number().int().positive(),

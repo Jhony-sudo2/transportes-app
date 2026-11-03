@@ -34,7 +34,7 @@ export async function requireRefundAccess(actor: RefundActor) {
     );
     if (!result.success)
       invalidResponse(
-        "No se pudieron verificar las sucursales asignadas en el servicio de usuarios.",
+        "No se pudieron verificar tus sucursales asignadas.",
       );
     branchId = result.data.length === 1 ? (result.data[0] ?? null) : null;
     if (branchId === null)
@@ -78,7 +78,7 @@ async function getDetail(actor: RefundActor, id: number, access: Access) {
 async function getBranchInfo(id: number, token: string) {
   const result = ManagedBranchChoiceSchema.safeParse(await fleetRequest(`branches/${id}`, token));
   if (!result.success || result.data.id !== id)
-    invalidResponse("Fleet no devolvió la sucursal solicitada.");
+    invalidResponse("No se encontró la sucursal solicitada.");
   return result.data;
 }
 export async function refundGet(actor: RefundActor, id?: string) {

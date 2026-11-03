@@ -122,8 +122,8 @@ export default function RegisterPage(): React.ReactElement {
           <div className="space-y-5">
             <p role="status">
               Tu cuenta fue creada. Abre el enlace de verificación que recibirás por correo para
-              completar el registro. Tus compras con el mismo NIT se vinculan a tu identidad
-              comercial; las compras CF se conservan por separado.
+              completar el registro. Tus compras con el mismo NIT quedarán vinculadas a tu
+              cuenta.
             </p>
             <Button asChild className="w-full">
               <Link href="/login">Iniciar sesión</Link>

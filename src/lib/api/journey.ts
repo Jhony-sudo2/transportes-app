@@ -124,7 +124,7 @@ export async function branchTrip(
     throw new ApplicationError(
       "system.internal_error",
       502,
-      "El servicio no devolvió el viaje solicitado.",
+      "No se encontró el viaje solicitado.",
     );
   if (
     trip.tripType !== "REGULAR" ||

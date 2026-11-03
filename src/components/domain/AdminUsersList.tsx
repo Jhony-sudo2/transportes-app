@@ -45,7 +45,7 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
       key: "email",
       header: "Correo",
       render: (_value, user) => (
-        <span className="whitespace-nowrap">{user.email || "No informado por el servicio"}</span>
+        <span className="whitespace-nowrap">{user.email || "No disponible"}</span>
       ),
     },
     {
@@ -112,8 +112,8 @@ export function AdminUsersList({ currentUserId }: { currentUserId: number }) {
       </div>
       {data?.content.some((user) => !user.email || !user.name) && (
         <p role="status" className="tg-notice">
-          El servicio de personal aún no informa nombre o correo para algunas cuentas. Puedes
-          identificarlas por su ID, rol y sucursales.
+          Algunas cuentas no tienen nombre o correo registrado. Puedes identificarlas por su ID,
+          rol y sucursales.
         </p>
       )}
       <form

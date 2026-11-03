@@ -68,8 +68,7 @@ export function PriceComponentsEditor({
         Agregar concepto
       </Button>
       <p className="text-xs text-[var(--tg-muted)]">
-        El estimado y el precio final se confirman en el servicio. Los conceptos no se suman ni
-        recalculan en esta pantalla.
+        El estimado y el precio final se confirman al guardar.
       </p>
     </div>
   );

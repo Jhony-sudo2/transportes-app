@@ -79,7 +79,7 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.json(
       {
         detail:
-          "Este contrato anterior fue retirado. Utiliza las operaciones actuales de compras y reembolsos.",
+          "Esta opción ya no está disponible. Utiliza las secciones de compras y reembolsos.",
       },
       { status: 410, headers: { "Cache-Control": "no-store" } },
     );

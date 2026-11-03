@@ -89,8 +89,7 @@ export function AccountTwoFactorControl({
         Activar autenticación de dos factores (2FA)
       </label>
       <p id="driver-two-factor-help" className="text-sm leading-6 text-[var(--tg-muted)]">
-        Al activarla, recibirás un código por correo para completar cada inicio de sesión. Esta
-        preferencia se guarda por separado de tus datos personales.
+        Al activarla, recibirás un código por correo para completar cada inicio de sesión.
       </p>
       <label htmlFor="two-factor-current-password" className="block text-sm font-medium">
         Contraseña actual para cambiar 2FA

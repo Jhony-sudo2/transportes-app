@@ -35,7 +35,7 @@ export async function getOwnDriver(access: Awaited<ReturnType<typeof requireAcco
   const driver = validatedFleetResult(
     AccountDriverSchema,
     raw,
-    "No se pudieron verificar los datos de tu perfil en Fleet.",
+    "No se pudieron verificar los datos de tu perfil.",
   );
   if (driver.userId !== access.user.id)
     throw new ApplicationError("auth.forbidden", 403, "El chofer no corresponde a tu cuenta.");
@@ -95,7 +95,7 @@ export async function accountIamRequest(
     throw new ApplicationError(
       "system.internal_error",
       502,
-      "No se pudo confirmar la respuesta del servicio de usuarios.",
+      "No se pudo confirmar la respuesta.",
     );
   }
 }

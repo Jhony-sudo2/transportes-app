@@ -62,7 +62,7 @@ export async function adminRequest(
         ? uncertainAssignment
         : statusChange
           ? "No se pudo confirmar la actualización. Actualiza el listado antes de volver a intentarlo."
-          : "No se pudo conectar al servicio de usuarios.",
+          : "No se pudo conectar al servidor.",
     );
   }
   if (!response.ok) {
@@ -77,7 +77,7 @@ export async function adminRequest(
               ? "Ya existe una cuenta o persona con ese correo, DPI o NIT. Revisa los datos."
               : response.status === 400
                 ? "Los datos no fueron aceptados. Revisa los campos y el rol seleccionado."
-                : "El servicio de usuarios no pudo completar la operación.";
+                : "No se pudo completar la operación.";
     const problem = await readUpstreamProblem(response, fallback);
     throw new ApplicationError(
       response.status === 409 ? "resource.conflict" : "system.internal_error",

@@ -155,7 +155,7 @@ export function PosBuyer({
             {customer.hasUser && (
               <div>
                 <dt>Correo de la cuenta (solo lectura)</dt>
-                <dd>{customer.email ?? "El servicio entregará al correo autorizado."}</dd>
+                <dd>{customer.email ?? "Se enviará al correo de la cuenta."}</dd>
               </div>
             )}
           </dl>

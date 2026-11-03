@@ -21,7 +21,7 @@ export function AdminNavigation({ name }: { name: string }): React.ReactElement 
       role="Administrador"
       navigationLabel="Navegación de administrador"
       items={options}
-      note="Administra la operación global, las políticas y los informes. Los permisos conservan los roles del proyecto."
+      note="Administra la operación global, las políticas y los informes."
     />
   );
 }

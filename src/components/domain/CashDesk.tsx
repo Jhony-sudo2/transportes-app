@@ -141,7 +141,7 @@ export function CashDesk({ userId, branchId }: { userId: number; branchId?: numb
         </Button>
       </form>
       <p className="text-sm text-[var(--tg-muted)]">
-        Sin fechas se muestra todo el historial autorizado.
+        Si no seleccionas fechas, se muestra todo el historial disponible.
       </p>
       {movements.data && (
         <div className="overflow-x-auto">

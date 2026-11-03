@@ -58,7 +58,7 @@ function CashClaimPayment({
       </fieldset>
       {unknownCheck && (
         <p role="alert">
-          El servicio requiere una comprobación adicional que esta pantalla aún no admite. Consulta
+          Este reembolso requiere una verificación adicional. Consulta
           al administrador antes de entregar efectivo.
         </p>
       )}
@@ -160,8 +160,7 @@ function RefundCard({
               {instructions && (
                 <p className="tg-notice">
                   Presenta tu comprobante e identificación en una sucursal. Código:{" "}
-                  <strong>{refund.refundCode}</strong>. Consultar estas instrucciones mantiene el
-                  reembolso pendiente y no elige un método de pago.
+                  <strong>{refund.refundCode}</strong>.
                 </p>
               )}
               <details>
@@ -265,7 +264,6 @@ export function CashRefunds({ userId }: { userId: number }) {
       </form>
       <p className="text-sm">
         Puedes pagar un reembolso de otra sucursal con su código, siempre que tu caja tenga fondos.
-        No se muestran listas de clientes ajenos.
       </p>
       {error && <p role="alert">{error}</p>}
       {refund && (

@@ -59,8 +59,8 @@ export async function fleetRequest(
       "system.internal_error",
       502,
       entity === "sucursal"
-        ? "El servicio de sucursales no está disponible. Inténtalo nuevamente."
-        : "No se pudo conectar al servicio de flota. Inténtalo nuevamente.",
+        ? "La información de sucursales no está disponible. Inténtalo nuevamente."
+        : "No se pudo conectar al servidor. Inténtalo nuevamente.",
     );
   }
   if (!response.ok) {

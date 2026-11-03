@@ -511,7 +511,7 @@ export async function commerceOperation(request: NextRequest, segments: string[]
         if (!ticket.cancellationPreview?.eligible)
           fail(
             ticket.cancellationPreview?.reason ??
-              "El servicio debe informar el importe exacto antes de confirmar la cancelación.",
+              "El importe exacto aún no está disponible. Actualiza los datos antes de confirmar la cancelación.",
             422,
           );
         const body = await input(request, V.TicketCancelInputSchema);

@@ -251,8 +251,7 @@ function TripCards({
             </dl>
             {trip.status === "CANCELLING" && (
               <p role="status" className="tg-notice">
-                Cancelación en proceso. El cierre comercial y las obligaciones de devolución aún
-                deben confirmarse.
+                Cancelación en proceso. Consulta el estado en unos minutos.
               </p>
             )}
             <div className="flex flex-wrap gap-3">

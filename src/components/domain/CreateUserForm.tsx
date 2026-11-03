@@ -202,8 +202,7 @@ export function CreateUserForm({
           </p>
         )}
         <p className="mb-6 max-w-lg text-sm leading-6 text-[var(--tg-muted)]">
-          Se solicitó al servicio el envío del correo de bienvenida. La recepción depende del
-          servicio de notificaciones.
+          La nueva cuenta recibirá un correo de bienvenida.
         </p>
         <Button onClick={() => setCreated(null)}>
           {cashier ? "Crear otro cajero" : "Crear otro usuario"}
@@ -291,7 +290,7 @@ export function CreateUserForm({
                   ))}
                 </select>
                 <p id="role-help" className="text-xs leading-5 text-[var(--tg-muted)]">
-                  Los choferes se registran desde Fleet para vincular su licencia e identidad.
+                  Los choferes se registran desde la flota de su sucursal para vincular su licencia.
                 </p>
                 {formState.errors.roleId && (
                   <p role="alert" className="text-xs text-red-600">
@@ -394,7 +393,7 @@ export function CreateUserForm({
         <Mail size={24} className="mb-5 text-[#b9d2bc]" aria-hidden="true" />
         <h2 className="text-lg font-semibold">Acceso por correo</h2>
         <p className="mt-3 text-sm leading-7 text-[#b9d2bc]">
-          El servicio genera el enlace de bienvenida para la nueva cuenta. No necesitas asignar una
+          La nueva cuenta recibirá un enlace de bienvenida por correo. No necesitas asignar una
           contraseña desde este formulario.
         </p>
         <p className="mt-5 border-t border-white/15 pt-5 text-xs leading-6 text-[#b9d2bc]">

@@ -13,7 +13,7 @@ export const ReportKindSchema = z.enum([
 ]);
 export const DecimalStringSchema = z
   .string()
-  .regex(/^-?\d+\.\d{2}(?:\d{2})?$/, "Los importes de Analytics deben ser cadenas decimales");
+  .regex(/^-?\d+\.\d{2}(?:\d{2})?$/, "Los importes del reporte no tienen un formato válido");
 const text = z.string().nullish(),
   count = z.number().int().nonnegative().safe().nullish(),
   amount = DecimalStringSchema.nullish();

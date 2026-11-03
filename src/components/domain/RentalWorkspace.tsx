@@ -577,7 +577,7 @@ function QuoteCard({
       )}
       {recoveryError && !paymentConfirmed && (
         <p role="alert">
-          No se pudo recuperar la referencia local del pago. Consulta el comprobante y el estado de
+          No se pudieron recuperar los datos del pago. Consulta el comprobante y el estado de
           la cotización antes de intentar cobrar nuevamente.
         </p>
       )}
@@ -836,7 +836,6 @@ export function RentalContractView({
                     <p>
                       La cancelación voluntaria usa el porcentaje global vigente y no el corte de
                       minutos del boleto. La cancelación empresarial autorizada reconoce el 100%.
-                      Ninguna entrega se realiza al crear el derecho.
                     </p>
                     <RentalCancellation
                       rental={rental.data}
@@ -851,7 +850,7 @@ export function RentalContractView({
             )}
           {rental.data.status === "CANCELLING" && (
             <p className="tg-notice">
-              Cancelación en proceso. Aún no se ha confirmado el cierre comercial.
+              Cancelación en proceso. Consulta el estado en unos minutos.
             </p>
           )}
           <Button variant="outline" onClick={rental.refresh}>
@@ -900,7 +899,7 @@ function RentalCancellation({
         </p>
       ) : (
         <p role="status">
-          El servicio aún no informó el importe exacto. Actualiza el alquiler antes de confirmar.
+          El importe exacto aún no está disponible. Actualiza el alquiler antes de confirmar.
         </p>
       )}
       {preview?.eligible && (

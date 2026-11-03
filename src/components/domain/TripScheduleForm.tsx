@@ -133,8 +133,8 @@ export function TripScheduleForm({
               onChange={(event) => setSalary(event.target.value)}
             />
             <p className="text-xs text-[var(--tg-muted)]">
-              Sugerido por el tipo de bus; puedes ajustarlo antes de la salida. El servicio congela
-              el importe del viaje.
+              Sugerido por el tipo de bus; puedes ajustarlo antes de la salida. Al confirmar,
+              el importe queda fijo para este viaje.
             </p>
           </div>
         </fieldset>

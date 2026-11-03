@@ -155,7 +155,7 @@ export function PasswordSetupForm({ mode }: { mode: "first-login" | "recovery" }
           >
             {!hasToken && (
               <div className="space-y-2">
-                <Label htmlFor="recovery-token">Token de recuperación</Label>
+                <Label htmlFor="recovery-token">Código de recuperación</Label>
                 <Input
                   id="recovery-token"
                   type="password"
@@ -164,7 +164,7 @@ export function PasswordSetupForm({ mode }: { mode: "first-login" | "recovery" }
                   {...register("token")}
                 />
                 <p className="text-xs text-[var(--color-text-secondary)]">
-                  Abre el enlace del correo o pega su token completo. No es el código de 2FA.
+                  Abre el enlace del correo o pega el código completo. No es el código de 2FA.
                 </p>
               </div>
             )}

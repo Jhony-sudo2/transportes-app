@@ -116,7 +116,7 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
         throw new ApplicationError(
           "system.internal_error",
           502,
-          "El servicio devolvió un reporte distinto del solicitado.",
+          "El reporte recibido no corresponde al solicitado.",
         );
       report.sections = source.rows.map((c) => ({
         title: c.categoryName,

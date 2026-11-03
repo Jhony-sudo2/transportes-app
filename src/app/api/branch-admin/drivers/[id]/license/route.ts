@@ -34,7 +34,7 @@ async function managedLicense(context: Context, expectedBranch: unknown) {
     throw new ApplicationError(
       "system.internal_error",
       502,
-      "No se recibió la referencia de la licencia del chofer. Actualiza el servicio de flota.",
+      "No se encontró la licencia del chofer. Actualiza el listado.",
     );
   const [rawLicense, rawTypes] = await Promise.all([
     fleetRequest(`licenses/${access.driver.licenseId}`, access.token),
