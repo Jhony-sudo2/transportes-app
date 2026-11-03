@@ -262,6 +262,7 @@ function RentalWorkspaceBody({
           {admin && <PriceComponentsEditor items={components} onChange={setComponents} />}
           <OperationForm
             key={`${hasReturn}`}
+            monetary={false}
             scope={`quote-create:${userId}:${branchId ?? "global"}`}
             path={`/api/rentals/quotes${admin ? "/admin" : ""}${query}`}
             fields={fields}
@@ -555,6 +556,7 @@ function QuoteCard({
           <div className="mt-4 space-y-5">
             <PriceComponentsEditor items={components} onChange={setComponents} />
             <OperationForm
+              monetary={false}
               scope={`quote-approve:${userId}:${q.quoteId}`}
               path={`/api/rentals/quotes/${q.quoteId}/approve${query}`}
               schema={V.QuoteApprovalSchema}
@@ -673,16 +675,25 @@ function RentalHistory({ userId: _, contractBase }: { userId: number; contractBa
   );
 }
 function RentalPolicyForm({ userId }: { userId: number }) {
-  const policy = useCustomerData("/api/rentals/policy", V.RentalPolicySchema),
+  const policy = useCustomerData("/api/rentals/policy", V.OptionalRentalPolicySchema),
     [notice, setNotice] = useState("");
+  const loaded = !policy.loading && !policy.error;
   return (
-    <details>
+    <details open={loaded && policy.data === null ? true : undefined}>
       <summary className="cursor-pointer underline">Política global de cotizaciones</summary>
       <div className="mt-4 space-y-4">
         <CustomerDataState loading={policy.loading} error={policy.error} retry={policy.refresh} />
         {notice && <p role="status">{notice}</p>}
-        {policy.data && (
+        {loaded && policy.data === null && (
+          <p role="status" className="tg-notice">
+            Aún no hay una política de cotización configurada. Defínela para poder crear
+            cotizaciones de alquiler.
+          </p>
+        )}
+        {loaded && (
           <OperationForm
+            key={policy.data ? "configured" : "new"}
+            monetary={false}
             scope={`quote-policy:${userId}`}
             path="/api/rentals/policy"
             method="PUT"
@@ -695,14 +706,14 @@ function RentalPolicyForm({ userId }: { userId: number }) {
                 type: "number",
                 min: 1,
                 step: "1",
-                value: policy.data.validityDays,
+                value: policy.data?.validityDays,
               },
               {
                 name: "waitCostPerHour",
                 label: "Tarifa de espera por hora (Q)",
                 type: "number",
                 min: 0,
-                value: policy.data.waitCostPerHour,
+                value: policy.data?.waitCostPerHour,
               },
             ]}
             label="Guardar política de cotización"
@@ -967,6 +978,7 @@ function RentalAssignment({
               />
             )}
             <OperationForm
+              monetary={false}
               scope={`rental-assign:${userId}:${rental.rentalId}`}
               path={`/api/rentals/contracts/${rental.rentalId}/assign${query}`}
               fields={[]}

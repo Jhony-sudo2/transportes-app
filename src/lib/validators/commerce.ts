@@ -85,11 +85,11 @@ export const TicketPaymentSchema = z.object({
   totalAmount: money,
   tickets: z.array(PaymentTicketSchema).min(1),
   customerId: id.optional(),
-  sellerUserId: id.optional(),
-  sourceBranchId: id.optional(),
+  sellerUserId: id.nullish(),
+  sourceBranchId: id.nullish(),
   revenueBranchId: id.optional(),
   paymentDate: date.optional(),
-  contactEmailStatus: z.string().optional(),
+  contactEmailStatus: z.string().nullish(),
 }) satisfies z.ZodType<C.TicketPayment, z.ZodTypeDef, unknown>;
 export const CounterPaymentSchema = TicketPaymentSchema.extend({
   customerId: id,
@@ -113,7 +113,7 @@ export const CommerceInvoiceSchema = z
     sellerUserId: id.nullable(),
     state: z.enum(["PAID", "CANCELLED"]).optional(),
     typeInvoice: z.enum(["TICKET_PAYMENT", "RENTAL_PAYMENT"]).optional(),
-    contactEmailStatus: z.string().optional(),
+    contactEmailStatus: z.string().nullish(),
     refundedAmount: money.nullish(),
     rentalId: id.nullish(),
     quoteId: id.nullish(),
@@ -121,7 +121,7 @@ export const CommerceInvoiceSchema = z
   .superRefine((v, c) => {
     if (
       (v.channel === "WEB" && (v.sourceBranchId !== null || v.sellerUserId !== null)) ||
-      (v.channel === "IN_PERSON" && (!v.sourceBranchId || !v.sellerUserId))
+      (v.channel === "IN_PERSON" && !v.sourceBranchId)
     )
       c.addIssue({ code: "custom", message: "Canal y sucursal de compra incompatibles" });
   }) satisfies z.ZodType<C.CommerceInvoice, z.ZodTypeDef, unknown>;
@@ -159,7 +159,7 @@ export const PurchaseResponseSchema = z
     sourceBranchId: id.nullable(),
     revenueBranchId: id,
     sellerUserId: id.nullish(),
-    contactEmailStatus: z.string().optional(),
+    contactEmailStatus: z.string().nullish(),
     state: z.enum(["PAID", "CANCELLED"]).optional(),
     typeInvoice: z.enum(["TICKET_PAYMENT", "RENTAL_PAYMENT"]).optional(),
     refundedAmount: money.nullish(),
@@ -167,7 +167,9 @@ export const PurchaseResponseSchema = z
       PaymentTicketSchema.extend({
         amount: money,
         state: z.enum(["PAID", "CANCELLED"]),
-        cancellationPreview: CancellationPreviewSchema.optional(),
+        cancellationPreview: CancellationPreviewSchema.nullish().transform(
+          (preview) => preview ?? undefined,
+        ),
       }),
     ),
   })
@@ -217,6 +219,25 @@ export const CashAccountSchema = z.object({
   balance: money,
   initializedAt: instant.nullable(),
 }) satisfies z.ZodType<C.CashAccount, z.ZodTypeDef, unknown>;
+export const CashAccountResponseSchema = CashAccountSchema.extend({
+  initialized: z.boolean(),
+  initializedAt: instant.nullish(),
+})
+  .superRefine((cash, context) => {
+    if (cash.initialized !== (cash.initializedAt != null))
+      context.addIssue({ code: "custom", message: "Estado de apertura de caja incompatible" });
+  })
+  .transform(({ initialized: _, ...cash }) => ({
+    ...cash,
+    initializedAt: cash.initializedAt ?? null,
+  }))
+  .pipe(CashAccountSchema);
+export const CashCapitalResponseSchema = z.object({
+  movementId: id,
+  kind: z.enum(["CAPITAL_IN", "CAPITAL_OUT"]),
+  amount: money.refine((amount) => amount > 0),
+  balanceAfter: money,
+});
 export const CashHistorySchema = z.object({
   balance: money,
   items: z.array(

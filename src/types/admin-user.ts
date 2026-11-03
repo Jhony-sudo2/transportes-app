@@ -29,10 +29,10 @@ export interface AdminUsersPage {
 }
 export interface StaffPerson extends Omit<TransportPerson, "adress"> {
   address: string;
+  email: string;
 }
 export interface StaffCreateRequest {
   person: StaffPerson;
-  email: string;
   role: ApiRoleName;
   branchIds: number[];
 }

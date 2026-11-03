@@ -113,7 +113,11 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
     else if (kind === "workshop-categories") {
       const source = serviceResult(V.ReportCategoryResponseSchema, raw);
       if (source.report !== kind)
-        throw new ApplicationError("system.internal_error", 502, "El servicio devolvió un reporte distinto del solicitado.");
+        throw new ApplicationError(
+          "system.internal_error",
+          502,
+          "El servicio devolvió un reporte distinto del solicitado.",
+        );
       report.sections = source.rows.map((c) => ({
         title: c.categoryName,
         rows: c.lines,
@@ -161,20 +165,33 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
     } else {
       if (params.get("kind") === "WORKSHOP") {
         const source = serviceResult(V.ReportCategoryResponseSchema, raw);
-        if (source.report !== "WORKSHOP" || source.filters.branchId !== a.branchId ||
-          source.rows.some((category) => category.lines.some((row) => row.branchId != null && row.branchId !== a.branchId)))
-          throw new ApplicationError("auth.forbidden", 403, "El reporte de taller no corresponde a tu sucursal.");
-        report.sections = source.rows.map((category) => ({ title: category.categoryName, rows: category.lines, subtotal: category.subtotal }));
+        if (
+          source.report !== "WORKSHOP" ||
+          source.filters.branchId !== a.branchId ||
+          source.rows.some((category) =>
+            category.lines.some((row) => row.branchId != null && row.branchId !== a.branchId),
+          )
+        )
+          throw new ApplicationError(
+            "auth.forbidden",
+            403,
+            "El reporte de taller no corresponde a tu sucursal.",
+          );
+        report.sections = source.rows.map((category) => ({
+          title: category.categoryName,
+          rows: category.lines,
+          subtotal: category.subtotal,
+        }));
         report.grandTotal = source.grandTotal;
         return NextResponse.json(serviceResult(V.AnalyticsReportSchema, report));
       }
-      const source = serviceResult(
-        V.ReportBranchOperationsResponseSchema,
-        raw,
-      );
-      if (source.filters.branchId !== a.branchId || source.report !== params.get("kind") ||
+      const source = serviceResult(V.ReportBranchOperationsResponseSchema, raw);
+      if (
+        source.filters.branchId !== a.branchId ||
+        source.report !== params.get("kind") ||
         Object.keys(source.subtotals).some((branch) => branch !== String(a.branchId)) ||
-        source.rows.some((row) => row.branchId != null && row.branchId !== a.branchId))
+        source.rows.some((row) => row.branchId != null && row.branchId !== a.branchId)
+      )
         throw new ApplicationError(
           "auth.forbidden",
           403,
@@ -182,7 +199,11 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
         );
       report.sections = [
         { title: "Operaciones de la sucursal", rows: source.rows },
-        ...Object.entries(source.subtotals).map(([branch, amount]) => ({ title: `Subtotal de sucursal #${branch}`, rows: [], subtotal: amount })),
+        ...Object.entries(source.subtotals).map(([branch, amount]) => ({
+          title: `Subtotal de sucursal #${branch}`,
+          rows: [],
+          subtotal: amount,
+        })),
       ];
       report.grandTotal = source.grandTotal;
     }

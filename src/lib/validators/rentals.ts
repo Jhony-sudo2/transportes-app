@@ -208,6 +208,8 @@ export const RentalPolicySchema = z
   .object({ validityDays: id, waitCostPerHour: money })
   .strict() satisfies z.ZodType<R.RentalPolicy, z.ZodTypeDef, unknown>;
 export const RentalPolicyResponseSchema = RentalPolicySchema.strip();
+/** null = todavía no hay política global configurada. */
+export const OptionalRentalPolicySchema = RentalPolicySchema.nullable();
 export const RentalPaymentInputSchema = z
   .object({
     quoteId: id,

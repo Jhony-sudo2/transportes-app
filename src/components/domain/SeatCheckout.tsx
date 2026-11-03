@@ -285,8 +285,10 @@ export function SeatCheckout({
               </h2>
               {payment.pending ? (
                 <p className="tg-notice">
-                  Hay un pago por confirmar. Recupera la misma operación antes de iniciar otra. No
-                  vuelvas a cobrar efectivo.
+                  Hay un pago por confirmar. Recupera la misma operación antes de iniciar otra.
+                  {counter
+                    ? " No vuelvas a cobrar efectivo."
+                    : " Conserva esta referencia para consultar el resultado de la compra."}
                 </p>
               ) : (
                 <>

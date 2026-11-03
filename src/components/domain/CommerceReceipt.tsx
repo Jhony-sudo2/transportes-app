@@ -64,7 +64,14 @@ export function CommerceReceipt({
                   invoice.sourceBranchId ? `#${invoice.sourceBranchId}` : "Compra web",
                 ],
                 ["Sucursal comercial", `#${invoice.revenueBranchId}`],
-                ["Vendedor", invoice.sellerUserId ? `#${invoice.sellerUserId}` : "En línea"],
+                [
+                  "Vendedor",
+                  invoice.channel === "WEB"
+                    ? "En línea"
+                    : invoice.sellerUserId
+                      ? `#${invoice.sellerUserId}`
+                      : "No informado por el servicio",
+                ],
                 ...(invoice.state
                   ? [["Estado", invoice.state === "PAID" ? "Pagada" : "Cancelada"]]
                   : []),

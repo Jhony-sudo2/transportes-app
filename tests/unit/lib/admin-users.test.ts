@@ -90,8 +90,7 @@ describe("Creacion administrativa de usuarios", () => {
     expect(mocks.fetch.mock.calls[1]?.[0]).toMatch(/users\/staff$/);
     const { adress, ...person } = input.person;
     expect(JSON.parse(mocks.fetch.mock.calls[1]?.[1].body)).toEqual({
-      person: { ...person, address: adress },
-      email: input.email,
+      person: { ...person, address: adress, email: input.email },
       role: "CASHIER",
       branchIds: [2],
     });

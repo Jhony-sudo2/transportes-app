@@ -29,11 +29,11 @@ export interface TicketPayment {
   totalAmount: number;
   tickets: PaymentTicket[];
   customerId?: number | undefined;
-  sellerUserId?: number | undefined;
-  sourceBranchId?: number | undefined;
+  sellerUserId?: number | null | undefined;
+  sourceBranchId?: number | null | undefined;
   revenueBranchId?: number | undefined;
   paymentDate?: string | undefined;
-  contactEmailStatus?: string | undefined;
+  contactEmailStatus?: string | null | undefined;
 }
 export interface CommerceInvoice {
   invoiceId: number;
@@ -48,7 +48,7 @@ export interface CommerceInvoice {
   sellerUserId: number | null;
   state?: "PAID" | "CANCELLED" | undefined;
   typeInvoice?: "TICKET_PAYMENT" | "RENTAL_PAYMENT" | undefined;
-  contactEmailStatus?: string | undefined;
+  contactEmailStatus?: string | null | undefined;
   refundedAmount?: number | null | undefined;
   rentalId?: number | null | undefined;
   quoteId?: number | null | undefined;

@@ -52,7 +52,7 @@ const fields: {
     name: "email",
     label: "Correo electrónico",
     type: "email",
-    maxLength: 255,
+    maxLength: 254,
     autoComplete: "email",
   },
 ];

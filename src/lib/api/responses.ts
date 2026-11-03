@@ -17,7 +17,11 @@ export async function readUpstreamProblem(
         "message" in raw ? raw.message : null,
         "title" in raw ? raw.title : null,
       ].find((value) => typeof value === "string" && value.trim());
-      if (response.status < 500 && typeof message === "string" && message.trim())
+      // Un 5xx con código de negocio (p. ej. QUOTE_POLICY_NOT_CONFIGURED) trae un mensaje controlado por el
+      // microservicio; mostrarlo evita ocultar la causa real. Sin código se conserva el mensaje general.
+      const businessCode =
+        "code" in raw && typeof raw.code === "string" && /^[A-Z][A-Z0-9_]{2,127}$/.test(raw.code);
+      if ((response.status < 500 || businessCode) && typeof message === "string" && message.trim())
         detail = message.trim().slice(0, 1000);
       if ("code" in raw && typeof raw.code === "string" && raw.code.length <= 128)
         upstream.code = raw.code;

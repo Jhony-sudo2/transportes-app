@@ -433,6 +433,30 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
       paymentDate: "2026-11-01",
     });
   });
+  it("confirma el pago web que Commerce devuelve sin sucursal física ni vendedor", async () => {
+    overrides["POST payments/tickets"] = {
+      ...invoice,
+      tickets: [{ ...ticket, state: "PAID" }],
+      sourceBranchId: null,
+      sellerUserId: null,
+      contactEmailStatus: null,
+    };
+    const body = { holdId: "hold-1", paymentDate: "2026-11-01" };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await commerceOperation(request("payments/tickets", body), [
+        "payments",
+        "tickets",
+      ]);
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        invoiceId: 10,
+        sourceBranchId: null,
+        sellerUserId: null,
+      });
+    }
+    expect(writes().map(([, options]) => options.headers["Idempotency-Key"])).toEqual([key, key]);
+    expect(writes().map(([, options]) => JSON.parse(options.body))).toEqual([body, body]);
+  });
   it.each([{ totalAmount: 1 }, { customerId: 7 }, { sourceBranchId: 3 }, { sellerUserId: 9 }])(
     "rechaza suplantación en pago web %j",
     async (extra) => {
@@ -506,6 +530,7 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
     overrides["POST cash/branches/2/open"] = {
       branchId: 2,
       balance: 0,
+      initialized: true,
       initializedAt: "2026-11-01T09:00:00-06:00",
     };
     expect(
@@ -513,7 +538,47 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
         .status,
     ).toBe(200);
     expect(writes()).toHaveLength(1);
+    expect(JSON.parse(writes()[0]?.[1].body)).toEqual({ initialAmount: 0 });
   });
+  it("muestra la caja sin abrir cuando Commerce omite initializedAt", async () => {
+    asRole("CAJERO");
+    overrides["GET cash/branches/2"] = { branchId: 2, balance: 0, initialized: false };
+    const response = await commerceOperation(request("cash"), ["cash"]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ branchId: 2, balance: 0, initializedAt: null });
+    expect(writes()).toHaveLength(0);
+  });
+  it("rechaza una caja que declara estar abierta sin fecha de apertura", async () => {
+    asRole("CAJERO");
+    overrides["GET cash/branches/2"] = { branchId: 2, balance: 0, initialized: true };
+    expect((await commerceOperation(request("cash"), ["cash"])).status).toBe(502);
+  });
+  it.each(["IN", "OUT"])(
+    "confirma el recibo de capital %s y consulta el saldo vigente",
+    async (type) => {
+      asRole("SUCURSAL_ADMIN");
+      overrides["POST cash/branches/2/capital-movements"] = {
+        movementId: 1,
+        kind: type === "IN" ? "CAPITAL_IN" : "CAPITAL_OUT",
+        amount: 10,
+        balanceAfter: 40,
+      };
+      overrides["GET cash/branches/2"] = {
+        branchId: 2,
+        balance: 40,
+        initialized: true,
+        initializedAt: "2026-11-01T09:00:00-06:00",
+      };
+      const response = await commerceOperation(
+        request("cash/capital-movements", { type, amount: 10, reason: "Capital" }, "branchId=2"),
+        ["cash", "capital-movements"],
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ branchId: 2, balance: 40 });
+      expect(writes()).toHaveLength(1);
+      expect(JSON.parse(writes()[0]?.[1].body)).toEqual({ type, amount: 10, reason: "Capital" });
+    },
+  );
   it("no permite editar contacto de un NIT con User", async () => {
     asRole("CAJERO");
     expect(
@@ -580,6 +645,45 @@ describe("Etapa 4: compra, caja e identidad comercial", () => {
   it("el historial pertenece a Customer.id y no exige que coincida con User.id", async () => {
     expect((await commerceOperation(request("invoices/mine"), ["invoices", "mine"])).status).toBe(
       200,
+    );
+  });
+  it("muestra compras web y presenciales aunque la vista del cliente omita al vendedor", async () => {
+    const web = {
+      ...invoice,
+      contactEmailStatus: null,
+      tickets: [{ ...ticket, state: "PAID", cancellationPreview: null }],
+    };
+    const counter = {
+      ...invoice,
+      invoiceId: 12,
+      channel: "IN_PERSON",
+      sourceBranchId: 2,
+      sellerUserId: undefined,
+      contactEmailStatus: null,
+      tickets: [{ ...ticket, ticketId: 13, state: "PAID", cancellationPreview: null }],
+    };
+    overrides["GET payments/me"] = [web, counter];
+    const response = await commerceOperation(request("invoices/mine"), ["invoices", "mine"]);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject([
+      { invoiceId: 10, channel: "WEB", contactEmailStatus: null },
+      { invoiceId: 12, channel: "IN_PERSON", sourceBranchId: 2, sellerUserId: null },
+    ]);
+    overrides["GET payments/12/tickets"] = counter;
+    const detail = await commerceOperation(request("invoices/12"), ["invoices", "12"]);
+    expect(detail.status).toBe(200);
+    const receipt = await detail.json();
+    expect(receipt.invoice).toMatchObject({ invoiceId: 12, sellerUserId: null });
+    expect(receipt.tickets[0]).toMatchObject({ ticketId: 13, invoiceId: 12, cancelled: false });
+    expect(receipt.tickets[0].cancellationPreview).toBeUndefined();
+    expect(writes()).toHaveLength(0);
+  });
+  it("no admite una factura presencial sin sucursal de venta", async () => {
+    overrides["GET payments/me"] = [
+      { ...invoice, channel: "IN_PERSON", sourceBranchId: null, tickets: [] },
+    ];
+    expect((await commerceOperation(request("invoices/mine"), ["invoices", "mine"])).status).toBe(
+      502,
     );
   });
   it("rechaza compras CF en el historial personal aunque coincida un correo", async () => {
@@ -843,6 +947,108 @@ describe("Etapa 6: cotización, pago y contratación", () => {
   });
 });
 describe("Etapa 7: taller, reportes y precisión", () => {
+  it("lee la demanda desde rows y conserva los conteos del servicio", async () => {
+    asRole("ADMIN");
+    const rows = [{ routeId: 1, originBranchId: 2, soldNotCancelledCount: 4 }];
+    overrides["GET reports/routes-demand"] = {
+      report: "routes-demand",
+      rows,
+      branches: [],
+      subtotals: {},
+      grandTotal: null,
+    };
+    const response = await analyticsOperation(request("routes-demand"), "routes-demand");
+    expect(response.status).toBe(200);
+    expect((await response.json()).sections[0].rows).toEqual(rows);
+  });
+  it.each(["ADMIN", "SUCURSAL_ADMIN"])(
+    "lee las categorías y sus líneas desde rows como %s",
+    async (role) => {
+      asRole(role);
+      const local = role === "SUCURSAL_ADMIN";
+      const path = local ? "branch-operations" : "workshop-categories";
+      overrides[`GET reports/${path}`] = {
+        report: local ? "WORKSHOP" : "workshop-categories",
+        filters: { branchId: local ? 2 : null },
+        rows: [
+          {
+            categoryId: 1,
+            categoryName: "Repuestos",
+            subtotal: "25.00",
+            lines: [{ branchId: 2, busId: 5, description: "Filtro", amount: "25.00" }],
+          },
+        ],
+        subtotals: { "1": "25.00" },
+        grandTotal: "25.00",
+      };
+      const response = await analyticsOperation(
+        request(path, undefined, local ? "branchId=2&kind=WORKSHOP" : ""),
+        path,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        grandTotal: "25.00",
+        sections: [{ title: "Repuestos", subtotal: "25.00", rows: [{ amount: "25.00" }] }],
+      });
+    },
+  );
+  it.each([
+    {
+      kind: "TICKET_SALES",
+      row: { invoiceId: 1, date: "2026-11-04", amount: "75.00" },
+      expected: { occurredAt: "2026-11-04", amount: "75.00" },
+    },
+    {
+      kind: "RENTALS",
+      row: { rentalId: 1, customer: "Cliente", amount: "75.00" },
+      expected: { customerName: "Cliente", amount: "75.00" },
+    },
+    {
+      kind: "DEPRECIATION",
+      row: {
+        tripId: 1,
+        kmDistance: 100,
+        depreciationRateApplied: "0.1250",
+        depreciationCost: "12.50",
+      },
+      expected: { distanceKm: 100, ratePerKmApplied: "0.1250", depreciationCost: "12.50" },
+    },
+  ])("lee el reporte $kind con sus subtotales por sucursal", async ({ kind, row, expected }) => {
+    asRole("SUCURSAL_ADMIN");
+    overrides["GET reports/branch-operations"] = {
+      report: kind,
+      filters: { branchId: 2 },
+      rows: [row],
+      subtotals: { "2": "75.00" },
+      grandTotal: "75.00",
+    };
+    const response = await analyticsOperation(
+      request("branch-operations", undefined, `branchId=2&kind=${kind}`),
+      "branch-operations",
+    );
+    expect(response.status).toBe(200);
+    const report = await response.json();
+    expect(report.sections[0].rows[0]).toMatchObject(expected);
+    expect(report.sections[1].subtotal).toBe("75.00");
+  });
+  it("rechaza una respuesta de Analytics atribuida a otra sucursal", async () => {
+    asRole("SUCURSAL_ADMIN");
+    overrides["GET reports/branch-operations"] = {
+      report: "RENTALS",
+      filters: { branchId: 3 },
+      rows: [],
+      subtotals: {},
+      grandTotal: "0.00",
+    };
+    expect(
+      (
+        await analyticsOperation(
+          request("branch-operations", undefined, "branchId=2&kind=RENTALS"),
+          "branch-operations",
+        )
+      ).status,
+    ).toBe(403);
+  });
   it.each([
     { routes: [] },
     {

@@ -120,5 +120,16 @@ export function useIdempotentCommand(scope: string) {
       setBusy(false);
     }
   }
-  return { execute, pending, ready, busy, error, sending };
+  // Solo para operaciones sin cobro: olvida la referencia pendiente para corregir los datos.
+  function discard() {
+    if (sending.current) return;
+    try {
+      sessionStorage.removeItem(storageKey);
+    } catch {
+      /* sin almacenamiento: basta con limpiar el estado */
+    }
+    setPending(null);
+    setError("");
+  }
+  return { execute, discard, pending, ready, busy, error, sending };
 }

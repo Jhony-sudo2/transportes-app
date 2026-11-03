@@ -18,6 +18,7 @@ export function OperationForm<T>({
   base = {},
   onSaved,
   confirmation = "Confirmo que los datos son correctos.",
+  monetary = true,
 }: {
   scope: string;
   path: string;
@@ -29,6 +30,8 @@ export function OperationForm<T>({
   base?: Record<string, unknown>;
   onSaved: (value: T) => void;
   confirmation?: string;
+  /** false: la operación no cobra ni mueve efectivo; permite descartar una operación pendiente. */
+  monetary?: boolean;
 }) {
   const mutation = useIdempotentCommand(scope),
     [validation, setValidation] = useState("");
@@ -137,8 +140,9 @@ export function OperationForm<T>({
       )}
       {mutation.pending && (
         <p role="status" className="tg-notice">
-          Hay una operación por confirmar. Recuperarla conserva los datos y su referencia, sin
-          iniciar otro cobro. No repitas una entrega física de efectivo.
+          {monetary
+            ? "Hay una operación por confirmar. Recuperarla conserva los datos y su referencia, sin iniciar otro cobro. No repitas una entrega física de efectivo."
+            : "La operación anterior no se pudo confirmar. Puedes reintentarla con los mismos datos o descartarla para corregirlos."}
         </p>
       )}
       {(validation || mutation.error) && (
@@ -146,9 +150,27 @@ export function OperationForm<T>({
           {validation || mutation.error}
         </p>
       )}
-      <Button type="submit" disabled={!mutation.ready || mutation.busy}>
-        {mutation.busy ? "Procesando…" : mutation.pending ? "Recuperar misma operación" : label}
-      </Button>
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" disabled={!mutation.ready || mutation.busy}>
+          {mutation.busy
+            ? "Procesando…"
+            : mutation.pending
+              ? monetary
+                ? "Recuperar misma operación"
+                : "Reintentar con los mismos datos"
+              : label}
+        </Button>
+        {mutation.pending && !monetary && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={mutation.busy}
+            onClick={() => mutation.discard()}
+          >
+            Descartar y editar datos
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

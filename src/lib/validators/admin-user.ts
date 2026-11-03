@@ -24,7 +24,7 @@ export const AdminRoleSchema = z.object({
 export const AdminRoleListSchema = z.array(AdminRoleSchema);
 export const CreateAdminUserSchema = z.object({
   person: TransportRegisterRequestSchema.shape.person,
-  email: z.string().trim().email("Correo electrónico inválido").max(255),
+  email: z.string().trim().email("Correo electrónico inválido").max(254),
   roleId: CreatableRoleSchema,
   branchIds: z.array(ManagedBranchIdSchema).default([]),
 });

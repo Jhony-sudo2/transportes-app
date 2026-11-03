@@ -95,8 +95,7 @@ export async function POST(request: NextRequest) {
     const roleName = selectedRole.name === "CAJERO" ? "CASHIER" : selectedRole.name;
     const { adress, ...person } = input.data.person;
     const upstream: StaffCreateRequest = {
-      person: { ...person, address: adress },
-      email: input.data.email,
+      person: { ...person, address: adress, email: input.data.email },
       role: roleName,
       branchIds: input.data.branchIds,
     };

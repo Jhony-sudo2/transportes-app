@@ -238,6 +238,25 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
     }
     if (path === "policy" && ["GET", "PUT"].includes(method)) {
       const a = await operationsAccess(request, ["ADMIN"]);
+      if (method === "GET") {
+        // Sin política configurada Journey responde 404; se devuelve null para que ADMIN pueda crear la primera.
+        try {
+          return NextResponse.json(
+            serviceResult(
+              V.RentalPolicyResponseSchema,
+              await transportService("rental-quote-policy", a),
+            ),
+          );
+        } catch (error) {
+          if (
+            error instanceof ApplicationError &&
+            error.status === 404 &&
+            error.upstream?.code === "RENTAL_POLICY_NOT_CONFIGURED"
+          )
+            return NextResponse.json(null);
+          throw error;
+        }
+      }
       return NextResponse.json(
         serviceResult(
           V.RentalPolicyResponseSchema,

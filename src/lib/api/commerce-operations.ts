@@ -348,7 +348,7 @@ export async function commerceOperation(request: NextRequest, segments: string[]
     if (path === "cash" && method === "GET") {
       const a = await operationsAccess(request, POS, true),
         cash = serviceResult(
-          V.CashAccountSchema,
+          V.CashAccountResponseSchema,
           await transportService(`cash/branches/${a.branchId}`, a),
         );
       if (cash.branchId !== a.branchId) fail("La caja no corresponde a tu sucursal.", 502);
@@ -376,14 +376,27 @@ export async function commerceOperation(request: NextRequest, segments: string[]
       const body = opening
         ? await input(request, V.CashOpeningSchema)
         : await input(request, V.CapitalInputSchema);
+      const result = await command(
+        request,
+        `cash/branches/${a.branchId}/${opening ? "open" : "capital-movements"}`,
+        a,
+        opening ? { initialAmount: body.amount } : body,
+      );
+      if (!opening) {
+        const movement = serviceResult(V.CashCapitalResponseSchema, result);
+        if (
+          !("type" in body) ||
+          movement.amount !== body.amount ||
+          movement.kind !== (body.type === "IN" ? "CAPITAL_IN" : "CAPITAL_OUT")
+        )
+          fail(
+            "No se pudo confirmar el movimiento. Consulta el historial de caja antes de repetirlo.",
+            502,
+          );
+      }
       const cash = serviceResult(
-        V.CashAccountSchema,
-        await command(
-          request,
-          `cash/branches/${a.branchId}/${opening ? "open" : "capital-movements"}`,
-          a,
-          body,
-        ),
+        V.CashAccountResponseSchema,
+        opening ? result : await transportService(`cash/branches/${a.branchId}`, a),
       );
       if (cash.branchId !== a.branchId || cash.initializedAt === null)
         fail("No se pudo confirmar la operación en la caja.", 502);

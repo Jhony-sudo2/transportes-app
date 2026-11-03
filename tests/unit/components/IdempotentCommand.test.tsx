@@ -3,6 +3,7 @@ import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { BranchWorkspaceProvider } from "@/components/layout/BranchWorkspaceProvider";
 import { useIdempotentCommand } from "@/hooks/useIdempotentCommand";
+import { TicketPaymentSchema } from "@/lib/validators/commerce";
 const fetchMock = vi.fn(),
   schema = z.object({ transactionId: z.number(), balanceAfter: z.number() });
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -15,6 +16,51 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("Recuperación de operaciones monetarias", () => {
+  it("recupera el mismo pago web tras un 502 y acepta la respuesta sin sucursal física", async () => {
+    const body = { holdId: "original-hold", paymentDate: "2026-11-04" };
+    const path = "/api/commerce/payments/tickets";
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ detail: "Respuesta no verificable" }, { status: 502 }),
+    );
+    const first = renderHook(() => useIdempotentCommand("checkout:7:web:20:payment"), { wrapper });
+    await waitFor(() => expect(first.result.current.ready).toBe(true));
+    await act(async () => {
+      await first.result.current.execute(path, body, TicketPaymentSchema);
+    });
+    const key = first.result.current.pending?.key;
+    expect(key).toBeTruthy();
+    first.unmount();
+    const recovered = renderHook(() => useIdempotentCommand("checkout:7:web:20:payment"), {
+      wrapper,
+    });
+    await waitFor(() => expect(recovered.result.current.pending?.key).toBe(key));
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        invoiceId: 10,
+        totalAmount: 75,
+        tickets: [{ ticketId: 11, tripId: 20, seatRow: 1, seatColumn: 1 }],
+        sourceBranchId: null,
+      }),
+    );
+    await act(async () => {
+      const result = await recovered.result.current.execute(
+        path,
+        recovered.result.current.pending?.body,
+        TicketPaymentSchema,
+      );
+      expect(result?.invoiceId).toBe(10);
+    });
+    expect(fetchMock.mock.calls.map(([, options]) => options.headers["Idempotency-Key"])).toEqual([
+      key,
+      key,
+    ]);
+    expect(fetchMock.mock.calls.map(([, options]) => JSON.parse(options.body))).toEqual([
+      body,
+      body,
+    ]);
+    expect(recovered.result.current.pending).toBeNull();
+    expect(sessionStorage.getItem("transport:pending:checkout:7:web:20:payment")).toBeNull();
+  });
   it("conserva llave y datos tras pérdida de respuesta y recarga de la página", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("network failed"));
     const first = renderHook(() => useIdempotentCommand("wallet:7"), { wrapper });
