@@ -194,6 +194,18 @@ const resources = z
 export const RentalAssignSchema = z
   .object({ outbound: resources, return: resources.optional() })
   .strict();
+/** Respuesta de Journey a POST /rentals/{id}/assign: un elemento por tramo asignado. */
+export const RentalAssignedLegsSchema = z
+  .array(
+    z.object({
+      tripId: id,
+      legType: z.enum(["OUTBOUND", "RETURN"]),
+      busId: id,
+      driverId: id,
+    }),
+  )
+  .min(1)
+  .max(2);
 export const RentalCancelSchema = z
   .object({
     cause: z.enum(["VOLUNTARY", "BUSINESS_INCIDENT"]),

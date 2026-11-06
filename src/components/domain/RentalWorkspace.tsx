@@ -199,7 +199,7 @@ function RentalWorkspaceBody({
             .filter((t) => t.active !== false)
             .map((t) => ({
               value: String(t.id),
-              label: `${t.name} · ${t.capacity} pasajeros${t.availabilityHint === "NONE" ? " · Sin disponibilidad" : t.availabilityHint === "UNKNOWN" ? " · Disponibilidad por confirmar" : ""}`,
+              label: `${t.name} · ${t.capacity} pasajeros${t.availabilityHint === "NONE" ? " · Sin disponibilidad" : ""}`,
             })),
         },
         { name: "waitHours", label: "Horas de espera", type: "number", value: 0, min: 0 },
@@ -787,8 +787,18 @@ export function RentalContractView({
                 {displayInstant(leg.scheduledArrivalAt)}
               </p>
               <p>
-                Bus {leg.busId ?? "sin asignar"} · Chofer {leg.driverId ?? "sin asignar"} ·{" "}
-                {tripLabels[leg.status]}
+                {admin && leg.operatingBranchId && (leg.busId || leg.driverId) ? (
+                  <LegResourceNames
+                    branchId={leg.operatingBranchId}
+                    busId={leg.busId}
+                    driverId={leg.driverId}
+                  />
+                ) : (
+                  <>
+                    Bus {leg.busId ?? "sin asignar"} · Chofer {leg.driverId ?? "sin asignar"}
+                  </>
+                )}{" "}
+                · {tripLabels[leg.status]}
               </p>
               {leg.departure && (
                 <p>
@@ -938,16 +948,20 @@ function RentalAssignment({
   branchId?: number;
   onSaved: () => void;
 }) {
+  const outboundLeg = rental.legs.find((l) => l.legType === "OUTBOUND"),
+    returnLeg = rental.legs.find((l) => l.legType === "RETURN");
+  // Arranca con lo que ya está asignado para poder confirmar o cambiar sin volver a elegir todo.
   const [outbound, setOutbound] = useState<{
       busId: number;
       driverId: number;
       driverBaseSalary?: number;
-    }>({ busId: 0, driverId: 0 }),
+    }>({ busId: outboundLeg?.busId ?? 0, driverId: outboundLeg?.driverId ?? 0 }),
     [back, setBack] = useState<{ busId: number; driverId: number; driverBaseSalary?: number }>({
-      busId: 0,
-      driverId: 0,
+      busId: returnLeg?.busId ?? 0,
+      driverId: returnLeg?.driverId ?? 0,
     });
-  const hasReturn = rental.legs.some((l) => l.legType === "RETURN"),
+  const hasReturn = !!returnLeg,
+    assigned = rental.legs.every((l) => l.busId != null && l.driverId != null),
     query = branchId ? `?branchId=${branchId}` : "";
   const quote = useCustomerData(
     `/api/rentals/quotes/${rental.quoteId}${query}`,
@@ -955,7 +969,9 @@ function RentalAssignment({
   );
   return (
     <details>
-      <summary className="cursor-pointer underline">Asignar recursos después del pago</summary>
+      <summary className="cursor-pointer underline">
+        {assigned ? "Cambiar recursos asignados" : "Asignar recursos después del pago"}
+      </summary>
       <div className="mt-4 space-y-5">
         <CustomerDataState loading={quote.loading} error={quote.error} retry={quote.refresh} />
         {quote.data && (
@@ -965,14 +981,16 @@ function RentalAssignment({
               busTypeId={quote.data.busTypeId}
               context={context}
               {...(branchId ? { branchId } : {})}
+              {...(outboundLeg ? { leg: outboundLeg } : {})}
               onChange={setOutbound}
             />
-            {hasReturn && (
+            {returnLeg && (
               <LegResources
                 label="Retorno"
                 busTypeId={quote.data.busTypeId}
                 context={context}
                 {...(branchId ? { branchId } : {})}
+                leg={returnLeg}
                 onChange={setBack}
               />
             )}
@@ -984,7 +1002,7 @@ function RentalAssignment({
               base={{ outbound, ...(hasReturn ? { return: back } : {}) }}
               schema={V.RentalAssignSchema}
               resultSchema={V.RentalContractSchema}
-              label="Confirmar asignación de tramos"
+              label={assigned ? "Actualizar asignación" : "Confirmar asignación de tramos"}
               onSaved={onSaved}
             />
           </>
@@ -993,25 +1011,51 @@ function RentalAssignment({
     </details>
   );
 }
+/** Placa y nombre del chofer de un tramo, leídos de Fleet; si no se pueden leer, muestra los IDs. */
+function LegResourceNames({
+  branchId,
+  busId,
+  driverId,
+}: {
+  branchId: number;
+  busId: number | null;
+  driverId: number | null;
+}) {
+  const resources = useCustomerData(`/api/rentals/resources?branchId=${branchId}`, resourceSchema);
+  const bus = resources.data?.buses.find((b) => b.id === busId),
+    driver = resources.data?.drivers.find((d) => d.id === driverId);
+  return (
+    <>
+      Bus {bus ? bus.plateNumber : (busId ?? "sin asignar")} · Chofer{" "}
+      {driver ? `${driver.name} ${driver.lastName}` : (driverId ?? "sin asignar")}
+    </>
+  );
+}
 function LegResources({
   label,
   busTypeId,
   context,
   branchId,
+  leg,
   onChange,
 }: {
   label: string;
   busTypeId: number;
   context: Context;
   branchId?: number;
+  /** Tramo actual: sus recursos ya asignados quedan preseleccionados. */
+  leg?: RentalContract["legs"][number];
   onChange: (value: { busId: number; driverId: number; driverBaseSalary?: number }) => void;
 }) {
   const [selectedBranch, setSelectedBranch] = useState(
-      branchId ?? context.branches.find((b) => b.active)?.id ?? 0,
+      branchId ?? leg?.operatingBranchId ?? context.branches.find((b) => b.active)?.id ?? 0,
     ),
-    [bus, setBus] = useState(0),
-    [driver, setDriver] = useState(0),
+    [bus, setBus] = useState(leg?.busId ?? 0),
+    [driver, setDriver] = useState(leg?.driverId ?? 0),
     [salary, setSalary] = useState("");
+  // Solo la sucursal original conserva los recursos asignados como opción aunque ya no pasen el filtro.
+  const keepBus = selectedBranch === leg?.operatingBranchId ? leg?.busId : null,
+    keepDriver = selectedBranch === leg?.operatingBranchId ? leg?.driverId : null;
   const resources = useCustomerData(
     `/api/rentals/resources?branchId=${selectedBranch}`,
     resourceSchema,
@@ -1076,7 +1120,10 @@ function LegResources({
           {resources.data?.buses
             .filter(
               (b) =>
-                b.busTypeId === busTypeId && b.rentalEnabled && busAvailability(b).active === true,
+                b.id === keepBus ||
+                (b.busTypeId === busTypeId &&
+                  b.rentalEnabled &&
+                  busAvailability(b).active === true),
             )
             .map((b) => (
               <option value={b.id} key={b.id}>
@@ -1098,7 +1145,7 @@ function LegResources({
         >
           <option value={0}>Selecciona un chofer</option>
           {resources.data?.drivers
-            .filter((d) => driverAvailability(d).active === true)
+            .filter((d) => d.id === keepDriver || driverAvailability(d).active === true)
             .map((d) => (
               <option value={d.id} key={d.id}>
                 {d.name} {d.lastName}
@@ -1108,6 +1155,9 @@ function LegResources({
       </label>
       <div className="space-y-2">
         <Label htmlFor={`rental-salary-${label}`}>Salario base de {label} (Q, opcional)</Label>
+        {leg?.busId != null && (
+          <p className="text-sm">Si lo dejas vacío se usa el salario aprobado en la cotización.</p>
+        )}
         <Input
           id={`rental-salary-${label}`}
           type="number"

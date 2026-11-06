@@ -82,7 +82,9 @@ export function JourneyOffersClient({
               Q{trip.price.toFixed(2)} por boleto ·{" "}
               {trip.seatsAvailable === null
                 ? "Disponibilidad por confirmar"
-                : `${trip.seatsAvailable} asientos disponibles`}
+                : trip.seatsAvailable === 0
+                  ? "Sin asientos disponibles"
+                  : `${trip.seatsAvailable} ${trip.seatsAvailable === 1 ? "asiento disponible" : "asientos disponibles"}`}
             </p>
             <p className="text-sm text-[var(--tg-muted)]">
               Viaje #{trip.tripId} · Bus #{trip.busId}

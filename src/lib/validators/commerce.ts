@@ -188,11 +188,23 @@ export const CustomerSuggestionSchema = z.object({
   fullName: z.string().min(1),
   hasUser: z.boolean(),
 });
-export const PosCustomerSchema = CustomerSuggestionSchema.extend({
-  email: z.string().email().nullish(),
-  address: z.string().nullish(),
-  phone: z.string().nullish(),
-}) satisfies z.ZodType<C.PosCustomer, z.ZodTypeDef, unknown>;
+/**
+ * Identity entrega `verifiedAccountEmail` (comprador con cuenta y correo verificado) y
+ * `contactEmail` (comprador sin cuenta). Se normalizan al campo `email` que usa la UI.
+ */
+export const PosCustomerSchema = z.preprocess(
+  (raw) => {
+    if (!raw || typeof raw !== "object" || "email" in raw) return raw;
+    const r = raw as { hasUser?: unknown; verifiedAccountEmail?: unknown; contactEmail?: unknown };
+    const email = r.hasUser === true ? r.verifiedAccountEmail : r.contactEmail;
+    return typeof email === "string" && email.trim() ? { ...raw, email: email.trim() } : raw;
+  },
+  CustomerSuggestionSchema.extend({
+    email: z.string().email().nullish(),
+    address: z.string().nullish(),
+    phone: z.string().nullish(),
+  }),
+) satisfies z.ZodType<C.PosCustomer, z.ZodTypeDef, unknown>;
 export const CounterCustomerInputSchema = z
   .object({
     nit: z

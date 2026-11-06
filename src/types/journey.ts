@@ -76,4 +76,8 @@ export interface RouteSegment {
   origin: Coordinate;
   destination: Coordinate;
   label: string;
+  /** Color opcional del trazo (por defecto verde institucional). */
+  color?: string | undefined;
+  /** Trazo discontinuo opcional, p. ej. "8 6". */
+  dashArray?: string | undefined;
 }

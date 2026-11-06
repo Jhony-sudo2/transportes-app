@@ -683,7 +683,15 @@ const api = http.createServer(async (request, response) => {
         leg.operatingBranchId = 2;
         leg.driverBaseSalarySnapshot = chosen.driverBaseSalary ?? 120;
       }
-      return commit(r);
+      // Igual que Journey: solo devuelve los tramos asignados.
+      return commit(
+        r.legs.map((l) => ({
+          tripId: l.tripId,
+          legType: l.legType,
+          busId: l.busId,
+          driverId: l.driverId,
+        })),
+      );
     }
     if (/^trips\/\d+\/(departure|arrival)$/.test(path)) {
       const t = rentals.flatMap((r) => r.legs).find((t) => t.tripId === Number(path.split("/")[1]));

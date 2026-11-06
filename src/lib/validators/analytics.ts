@@ -173,6 +173,24 @@ export const ReportMapResponseSchema = z.object({
   filters: z.object({ branchId: id }),
   rows: ReportMapSchema,
 });
+const nameMap = z.record(z.string());
+export const ReportNamesSchema = z.object({
+  branches: nameMap,
+  routes: nameMap,
+  users: nameMap,
+  buses: nameMap,
+  drivers: nameMap,
+});
+export const ReportBusOptionListSchema = z.array(
+  z.object({
+    id,
+    label: z.string(),
+    busTypeName: z.string(),
+    branchId: id,
+    branchName: z.string(),
+  }),
+);
+export const ReportRouteOptionListSchema = z.array(z.object({ id, label: z.string() }));
 export const AnalyticsReportSchema = z.object({
   kind: ReportKindSchema,
   sections: z.array(
@@ -186,5 +204,7 @@ export const AnalyticsReportSchema = z.object({
   ),
   grandTotal: DecimalStringSchema.optional(),
   mapRoutes: ReportMapSchema.optional(),
+  incomingRoutes: ReportMapSchema.optional(),
+  names: ReportNamesSchema.optional(),
   filters: z.record(z.string()),
 }) satisfies z.ZodType<AnalyticsReport, z.ZodTypeDef, unknown>;

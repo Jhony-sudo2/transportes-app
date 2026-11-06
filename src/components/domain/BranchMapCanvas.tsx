@@ -94,7 +94,11 @@ export default function BranchMapCanvas(props: BranchMapProps) {
               [segment.origin.latitude, segment.origin.longitude],
               [segment.destination.latitude, segment.destination.longitude],
             ]}
-            pathOptions={{ color: "#176a52", weight: 4 }}
+            pathOptions={{
+              color: segment.color ?? "#176a52",
+              weight: 4,
+              ...(segment.dashArray ? { dashArray: segment.dashArray } : {}),
+            }}
           >
             <Popup>{segment.label}</Popup>
           </Polyline>

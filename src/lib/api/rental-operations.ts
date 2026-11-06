@@ -489,11 +489,18 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
             422,
           );
       }
-      const updated = serviceResult(
-        V.RentalContractSchema,
+      // Journey responde solo los tramos asignados; el contrato se vuelve a leer para confirmar.
+      const assigned = serviceResult(
+        V.RentalAssignedLegsSchema,
         await command(request, `rentals/${rid}/assign`, a, input),
       );
+      const updated = await contract(rid, a);
       if (
+        assigned.length !== r.legs.length ||
+        assigned.some((l) => {
+          const selected = l.legType === "OUTBOUND" ? input.outbound : input.return;
+          return !selected || l.busId !== selected.busId || l.driverId !== selected.driverId;
+        }) ||
         updated.rentalId !== rid ||
         updated.invoiceId !== r.invoiceId ||
         updated.quoteId !== r.quoteId ||
@@ -513,9 +520,7 @@ export async function rentalOperation(request: NextRequest, segments: string[]) 
             !selected ||
             l.busId !== selected.busId ||
             l.driverId !== selected.driverId ||
-            l.status !== "SCHEDULED" ||
-            (selected.driverBaseSalary !== undefined &&
-              l.driverBaseSalarySnapshot !== selected.driverBaseSalary)
+            l.status !== "SCHEDULED"
           );
         })
       )

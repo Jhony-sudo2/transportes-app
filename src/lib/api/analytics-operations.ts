@@ -10,6 +10,37 @@ import { checkedBody, serviceResult, transportService } from "./transport-servic
 import { adminErrorResponse } from "./admin";
 import { ApplicationError } from "@/types/error";
 import type { AnalyticsReport } from "@/types/analytics";
+import { busOptions, incomingRoutes, resolveReportNames, routeOptions } from "./analytics-names";
+type ReportAccess = Parameters<typeof resolveReportNames>[1];
+/** Agrega los nombres (sucursal, ruta, vendedor, bus, chofer) y valida la respuesta final. */
+async function finish(report: AnalyticsReport, a: ReportAccess, subtotalBranches: string[] = []) {
+  report.names = await resolveReportNames(report, a);
+  const names = report.names.branches;
+  if (subtotalBranches.length)
+    report.sections = report.sections.map((section, index) => {
+      const branch = subtotalBranches[index];
+      return branch
+        ? { ...section, title: `Subtotal de ${names[branch] ?? `sucursal #${branch}`}` }
+        : section;
+    });
+  if (report.kind === "route-map") {
+    const origin = Number(report.filters["originBranchId"]),
+      branchName = names[String(origin)] ?? `la sucursal #${origin}`,
+      rows = (routes: AnalyticsReport["mapRoutes"], direction: string) =>
+        (routes ?? []).map((r) => ({ routeId: r.routeId, direction }));
+    report.sections = [
+      {
+        title: `Rutas que salen de ${branchName} (origen)`,
+        rows: rows(report.mapRoutes, "Origen"),
+      },
+      {
+        title: `Rutas que llegan a ${branchName} (destino)`,
+        rows: rows(report.incomingRoutes, "Destino"),
+      },
+    ];
+  }
+  return NextResponse.json(serviceResult(V.AnalyticsReportSchema, report));
+}
 export async function analyticsOperation(request: NextRequest, kindRaw: string) {
   try {
     if (kindRaw === "context") {
@@ -18,6 +49,17 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
           ? [serviceResult(BranchSchema, await transportService(`branches/${a.branchId}`, a))]
           : serviceResult(BranchListSchema, await transportService("branches", a));
       return NextResponse.json(branches.filter((b) => !a.branchId || b.id === a.branchId));
+    }
+    // Opciones con nombre para los filtros opcionales de bus y ruta (en vez de escribir IDs).
+    if (kindRaw === "buses" || kindRaw === "routes") {
+      const a = await operationsAccess(request, ["ADMIN", "SUCURSAL_ADMIN"], true),
+        selected = request.nextUrl.searchParams.get("branchId"),
+        branchId = a.branchId ?? (selected ? checkedBody(id, Number(selected)) : undefined);
+      return NextResponse.json(
+        kindRaw === "buses"
+          ? serviceResult(V.ReportBusOptionListSchema, await busOptions(a, branchId))
+          : serviceResult(V.ReportRouteOptionListSchema, await routeOptions(a, branchId)),
+      );
     }
     const kind = checkedBody(V.ReportKindSchema, kindRaw),
       local = kind === "fleet-operations" || kind === "branch-operations",
@@ -133,16 +175,12 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
           "El mapa recibido no corresponde a la sucursal de origen solicitada.",
         );
       report.mapRoutes = source.rows;
-      report.sections = [
-        {
-          title: "Rutas por origen",
-          rows: report.mapRoutes.map((r) => ({
-            routeId: r.routeId,
-            origin: `${r.origin.lat}, ${r.origin.lng}`,
-            destination: `${r.destination.lat}, ${r.destination.lng}`,
-          })),
-        },
-      ];
+      // Analytics solo devuelve rutas donde la sucursal es ORIGEN; las de DESTINO se leen de Journey.
+      report.incomingRoutes = await incomingRoutes(
+        a,
+        Number(params.get("originBranchId")),
+        source.rows,
+      );
     } else if (kind === "fleet-operations") {
       const source = serviceResult(
         z.object({ buses: z.array(V.ReportRowSchema), drivers: z.array(V.ReportRowSchema) }),
@@ -183,7 +221,7 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
           subtotal: category.subtotal,
         }));
         report.grandTotal = source.grandTotal;
-        return NextResponse.json(serviceResult(V.AnalyticsReportSchema, report));
+        return await finish(report, a);
       }
       const source = serviceResult(V.ReportBranchOperationsResponseSchema, raw);
       if (
@@ -206,8 +244,9 @@ export async function analyticsOperation(request: NextRequest, kindRaw: string) 
         })),
       ];
       report.grandTotal = source.grandTotal;
+      return await finish(report, a, ["", ...Object.keys(source.subtotals)]);
     }
-    return NextResponse.json(serviceResult(V.AnalyticsReportSchema, report));
+    return await finish(report, a);
   } catch (error) {
     return adminErrorResponse(error);
   }

@@ -155,7 +155,11 @@ export function PosBuyer({
             {customer.hasUser && (
               <div>
                 <dt>Correo de la cuenta (solo lectura)</dt>
-                <dd>{customer.email ?? "Se enviará al correo de la cuenta."}</dd>
+                <dd>
+                  {customer.email
+                    ? `${customer.email} · El comprobante se enviará a este correo.`
+                    : "La cuenta no tiene un correo verificado: el comprobante solo se entregará impreso."}
+                </dd>
               </div>
             )}
           </dl>

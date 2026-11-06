@@ -11,6 +11,41 @@ import {
 } from "@/lib/validators/admin-user";
 import { ApplicationError } from "@/types/error";
 import type { StaffCreateRequest } from "@/types/admin-user";
+import { z } from "zod";
+const DirectoryPageSchema = z.object({
+  content: z.array(
+    z.object({
+      id: z.number().int().positive(),
+      email: z.string().nullish(),
+      name: z.string().nullish(),
+      lastName: z.string().nullish(),
+    }),
+  ),
+  totalPages: z.number().int().nonnegative(),
+});
+type DirectoryEntry = { email: string; name: string; lastName: string };
+/** Directorio de usuarios por id. Si falla se devuelve null y el listado se muestra sin completar. */
+async function userDirectory(token: string): Promise<Map<number, DirectoryEntry> | null> {
+  const directory = new Map<number, DirectoryEntry>();
+  try {
+    for (let page = 0; page < 50; page++) {
+      const result = DirectoryPageSchema.safeParse(
+        await adminRequest(`users?page=${page}&size=200&sortBy=id&ascending=true`, token),
+      );
+      if (!result.success) return null;
+      for (const user of result.data.content)
+        directory.set(user.id, {
+          email: user.email ?? "",
+          name: user.name ?? "",
+          lastName: user.lastName ?? "",
+        });
+      if (page + 1 >= result.data.totalPages) break;
+    }
+  } catch {
+    return null;
+  }
+  return directory;
+}
 export async function GET(request: NextRequest) {
   try {
     const { token } = await requireAdminAccess();
@@ -39,14 +74,31 @@ export async function GET(request: NextRequest) {
         502,
         "El listado de usuarios no tiene el formato esperado.",
       );
-    if (parsed.data.email && result.data.some((user) => !user.email))
+    // /users/staff no trae correo ni nombre: se completan con el directorio /users (ADMIN).
+    let staff = result.data;
+    if (staff.some((user) => !user.email || !user.name)) {
+      const directory = await userDirectory(token);
+      if (directory)
+        staff = staff.map((user) => {
+          const found = directory.get(user.id);
+          return found
+            ? {
+                ...user,
+                email: user.email || found.email,
+                name: user.name || found.name,
+                lastName: user.lastName || found.lastName,
+              }
+            : user;
+        });
+    }
+    if (parsed.data.email && staff.some((user) => !user.email))
       throw new ApplicationError(
         "validation.failed",
         422,
         "La búsqueda por correo no está disponible por ahora. Consulta por rol, sucursal o estado.",
       );
     const email = parsed.data.email.toLowerCase();
-    const users = result.data.filter((user) => !email || user.email.toLowerCase().includes(email));
+    const users = staff.filter((user) => !email || user.email.toLowerCase().includes(email));
     const size = 10;
     return NextResponse.json({
       content: users.slice(parsed.data.page * size, (parsed.data.page + 1) * size),
